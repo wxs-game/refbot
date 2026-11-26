@@ -42,8 +42,8 @@ function toast(text, cls, ms) {
   toast.t = setTimeout(() => { e.className = ''; }, ms || 2600);
 }
 function showMessage(text) { toast(String(text), 'lose', 4200); }
-window.showWinPopup = (amount, mult, isFreebet) =>
-  toast('Победа! +' + Number(amount).toFixed(2) + ' $' + (mult ? ' (x' + Number(mult).toFixed(2) + ')' : '') + (isFreebet ? ' · фрибет' : ''), 'win');
+window.showWinPopup = (amount, mult) =>
+  toast('Победа! +' + Number(amount).toFixed(2) + ' $' + (mult ? ' (x' + Number(mult).toFixed(2) + ')' : ''), 'win');
 
 /* ---------- 2. серверный слой ---------- */
 const NO_TG = 'Откройте игру из Telegram — иначе баланс и ставки недоступны.';
@@ -230,7 +230,6 @@ function upgMinBet(chance) {
 // Исход броска считает сервер (SQL-функция upgrader_play) — в браузере его нет.
 
 function upgBet() {
-    if (upgraderFreebetOn && upgraderFreebets[0]) return Number(upgraderFreebets[0].amount);
     const v = parseFloat(document.getElementById('upgBetInput')?.value);
     return isFinite(v) && v > 0 ? roundMoney(v) : 0;
 }
@@ -487,12 +486,12 @@ function upgDraw() {
 
     // 3) тексты — только если что-то изменилось
     const disp = Math.round(shown);
-    const tKey = disp + '|' + chance + '|' + bet + '|' + (upg.result || '') + '|' + (upg.result ? Math.round(upg.fade * 200) : 0) + '|' + upg.size + '|' + upgraderFreebetOn + '|' + upg.resultPayout + '|' + (window.WXG?.key || '');
+    const tKey = disp + '|' + chance + '|' + bet + '|' + (upg.result || '') + '|' + (upg.result ? Math.round(upg.fade * 200) : 0) + '|' + upg.size + '|' + upg.resultPayout + '|' + (window.WXG?.key || '');
     if (upg.textKey !== tKey) {
         upg.textKey = tKey;
         const gross = upgCalc(bet, chance).payout;
         const payout = upg.result && Number.isFinite(upg.resultPayout)
-            ? upg.resultPayout : (upgraderFreebetOn ? roundMoney(gross - bet) : gross);
+            ? upg.resultPayout : gross;
         const outcome = upg.result;
         upg.centerValue.textContent = outcome === 'win' ? 'ПОБЕДА' : outcome === 'lose' ? 'МИМО' : `${disp}%`;
         upg.centerCoef.textContent = outcome === 'win' ? `+${payout.toFixed(2)} $` : `x${upgCalc(bet, chance).coef.toFixed(2)}`;
@@ -844,7 +843,7 @@ function upgRefresh(resetResult = true, src) {
     if (chanceInput && document.activeElement !== chanceInput) chanceInput.value = upg.chance;
 
     upgSyncSlider();
-    const bet = (upgraderFreebetOn ? Number(upgraderFreebets[0]?.amount) : upgBet()) || MIN_BET;
+    const bet = upgBet() || MIN_BET;
     const { payout, coef } = upgCalc(bet, upg.chance);
     const info = document.getElementById('upgInfo');
     if (info) {
@@ -943,7 +942,6 @@ function openUpgrader() {
     upgInit();
     if (!upg.busy) {
         upgRefresh(true);
-        loadUpgraderFreebets();
         window.WXG?.refresh();
     }
 }
@@ -995,23 +993,20 @@ function upgRelease(label = 'ИГРАТЬ') {
     document.getElementById('upgraderPage')?.classList.remove('upg-locked');
     document.body.classList.remove('upg-spinning');
     upgSyncSlider();
-    renderUpgraderFreebet();
+    upgSyncBetInput();
 }
 
 // Ставку, бросок и выплату делает Supabase (upgrader_play), клиент только показывает итог
-async function upgApi(bet, chance, freebetId) {
-    return crashRpc(freebetId ? 'upgrader_freebet_play' : 'upgrader_play', freebetId
-        ? { p_fb_id: freebetId, p_chance: chance }
-        : { p_bet: bet, p_chance: chance, p_request: crypto.randomUUID() });
+async function upgApi(bet, chance) {
+    return crashRpc('upgrader_play', { p_bet: bet, p_chance: chance, p_request: crypto.randomUUID() });
 }
 
 async function playUpgrader() {
     if (window.WXG?.on) return WXG.play();
     if (upg.busy || isBetProcessing || isEconomyLocked) return;
-    const fb = upgraderFreebetOn ? upgraderFreebets[0] : null;
-    const bet = fb ? Number(fb.amount) : upgBet(), chance = upg.chance;
+    const bet = upgBet(), chance = upg.chance;
     if (bet < MIN_BET) return showMessage('Минимальная ставка — 0.10 $!');
-    if (!fb && bet > currentBalance) return showMessage('Недостаточно средств на балансе!');
+    if (bet > currentBalance) return showMessage('Недостаточно средств на балансе!');
     const { payout, coef } = upgCalc(bet, chance);
     if (payout <= bet) return showMessage(`При шансе ${chance}% минимальная ставка — ${upgMinBet(chance).toFixed(2)} $. Увеличьте ставку или уменьшите шанс.`);
     if (!lockEconomy()) return;
@@ -1019,7 +1014,7 @@ async function playUpgrader() {
     upg.busy = true;
     isBetProcessing = true;
     upgSyncSlider();
-    renderUpgraderFreebet();
+    upgSyncBetInput();
 
     const btn = document.getElementById('upgPlayBtn');
     if (btn) { btn.disabled = true; btn.textContent = 'Вращение...'; btn.setAttribute('aria-busy', 'true'); }
@@ -1028,10 +1023,10 @@ async function playUpgrader() {
 
     try {
         const snapshot = snapshotBalanceState();
-        if (!fb) { currentTurnover = roundMoney(currentTurnover + bet); currentBetsCount++; }
-        if (!fb) setUIBalance(roundMoney(currentBalance - bet));
+        currentTurnover = roundMoney(currentTurnover + bet); currentBetsCount++;
+        setUIBalance(roundMoney(currentBalance - bet));
 
-        const srv = await upgApi(bet, chance, fb?.id);
+        const srv = await upgApi(bet, chance);
         if (!srv || !srv.ok) {
             restoreBalanceState(snapshot);
             showMessage((srv && srv.error) || 'Не удалось сыграть. Проверьте соединение и попробуйте снова.');
@@ -1051,21 +1046,16 @@ async function playUpgrader() {
             if (srvCoef > currentMaxWin) currentMaxWin = srvCoef;
         }
 
-        const liveBet = fb ? null : broadcastLiveBet(bet, 'Апгрейдер');
+        const liveBet = broadcastLiveBet(bet, 'Апгрейдер');
         const res = document.getElementById('upgResult');
         upgHideResultText();      // старый итог плавно гаснет, кольцо и стрелка — внутри upgAnimate
         await upgAnimate(win, chance);
-
-        if (fb) {
-            upgraderFreebets = upgraderFreebets.filter(item => item.id !== fb.id);
-            upgraderFreebetOn = false;
-        }
 
         setUIBalance(Number(srv.balance));
         liveBet?.then(id => resolveLiveBetWin(id, bet, credited));
 
         window.haptic(credited > 0 ? 'success' : 'error');
-        if (credited > 0) window.showWinPopup?.(credited, srvCoef, !!fb);
+        if (credited > 0) window.showWinPopup?.(credited, srvCoef);
         if (res) {
             clearTimeout(upgResTimer);
             res.style.opacity = '1';
@@ -1074,40 +1064,13 @@ async function playUpgrader() {
         }
     } finally {
         upgRelease();
-        await loadUpgraderFreebets();
     }
 }
 
 
-/* UPGRADER FREEBETS */
-let upgraderFreebets = [];
-let upgraderFreebetOn = false;
-
-async function loadUpgraderFreebets() {
-    const result = await crashRpc('upgrader_freebets_list');
-    if (result?.ok) upgraderFreebets = result.freebets || [];
-    if (!upgraderFreebets.length || window.WXG?.on) upgraderFreebetOn = false;
-    renderUpgraderFreebet();
-}
-
-function renderUpgraderFreebet() {
-    const button = document.getElementById('upgFreebetBtn');
+function upgSyncBetInput() {
     const input = document.getElementById('upgBetInput');
-    if (!button) return;
-    const fb = window.WXG?.on ? null : upgraderFreebets[0];
-    button.hidden = !fb;
-    button.style.display = fb ? 'flex' : 'none';
-    button.disabled = upg.busy;
-    button.classList.toggle('on', upgraderFreebetOn);
-    button.textContent = fb ? `Фрибет ${Number(fb.amount).toFixed(2)} $${upgraderFreebetOn ? ' · выбран' : ''}` : '';
-    if (input) input.disabled = upgraderFreebetOn || upg.busy;
-}
-
-function toggleUpgraderFreebet() {
-    if (upg.busy || window.WXG?.on || !upgraderFreebets.length) return;
-    upgraderFreebetOn = !upgraderFreebetOn;
-    renderUpgraderFreebet();
-    upgRefresh();
+    if (input) input.disabled = upg.busy;
 }
 
 
@@ -1718,8 +1681,7 @@ function toggleUpgraderFreebet() {
         page.classList.toggle('gift-mode', gifts);
         $('wxsGiftInventory').hidden = !gifts;
         document.querySelectorAll('[data-upg-mode]').forEach((b) => b.setAttribute('aria-pressed', String((b.dataset.upgMode === 'gifts') === gifts)));
-        if (gifts) upgraderFreebetOn = false;
-        renderUpgraderFreebet();
+        upgSyncBetInput();
         $('upgPlayBtn').textContent = gifts && pending ? 'ПРОВЕРИТЬ СТАВКУ' : 'ИГРАТЬ';
         ensureCenter();
         clearInterval(G.timer);

@@ -266,23 +266,9 @@ input,textarea{user-select:text;-webkit-user-select:text}
 .mines-bet-header .card-input-wrap input{
     font-size: 16px !important;
 }
-.crash-fb-btn{
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    width: 100%;
-    margin-top: 10px;
-    padding: 10px 12px;
-    border-radius: 12px;
-    border: 1px solid transparent;
-    font-size: 13px;
-    font-weight: 800;
-    transition: all 0.15s ease;
-}
+
 #upgPlayBtn{ display: block; width: 100%; min-height: 48px; margin-top: 14px; }
 #upgraderPage input{ font-size: 16px; }
-#upgFreebetBtn[hidden]{ display: none !important; }
 #upgraderPage .upg-card{
     position: relative;
     background: radial-gradient(ellipse at 50% 12%, rgba(240,72,84,.065), transparent 60%), #0d0c10;
@@ -624,7 +610,6 @@ input,textarea{user-select:text;-webkit-user-select:text}
 #upgraderPage.gift-mode .upg-center.gift-empty .upg-center-coef,
 #upgraderPage.gift-mode .upg-center.gift-empty .upg-center-caption{ visibility: hidden; }
 #upgraderPage.gift-mode .upg-center-coef{ overflow: hidden; text-overflow: ellipsis; padding: 0 22%; box-sizing: border-box; }
-#upgraderPage.gift-mode #upgFreebetBtn{ display: none !important; }
 .wxs-sheet{
     box-sizing: border-box; width: min(100%, 520px); max-width: 100%; max-height: 86vh; margin: auto auto 0; padding: 8px 14px calc(16px + env(safe-area-inset-bottom));
     border: 1px solid rgba(255,255,255,.12); border-bottom: 0; border-radius: 26px 26px 0 0; color: #f5f4f0;
