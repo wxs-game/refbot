@@ -17,7 +17,7 @@
  <header id="top">
   <div class="tav" id="tAv">?</div>
   <div class="tname" id="tName">Игрок</div>
-  <div class="tbal" id="tBal">…</div>
+  <div class="tbal"><button type="button" class="tb-plus" id="tpOpen" aria-label="Пополнить баланс"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2.5v11M2.5 8h11"/></svg></button><span id="tBal">…</span></div>
  </header>
 
  <section class="page hidden" id="p-cases">
@@ -61,17 +61,14 @@
    <div class="pinfo">
     <b id="un">Игрок</b>
     <div class="muted" id="uh"></div>
-    <div class="muted">Баланс: <b id="bal" class="gold">…</b></div>
    </div>
   </div>
   <div class="card stats">
    <div><small>Оборот</small><b id="stTurn">0.00 $</b></div>
    <div><small>Ставок</small><b id="stBets">0</b></div>
-   <div><small>Побед</small><b id="stWins">0</b></div>
    <div><small>Макс. коэф.</small><b id="stMax">x0.00</b></div>
   </div>
-  <button class="btn" id="openInv" type="button">Инвентарь подарков <span id="giftCount">—</span></button>
-  <button class="btn ghost" id="topup" type="button">Пополнить +25 $ (демо)</button>
+  <button class="btn" id="openInv" type="button">Инвентарь <span id="giftCount">—</span></button>
  </section>
 
  <dialog id="reward" class="wxs-sheet rwd" aria-labelledby="rwTitle">
@@ -97,6 +94,23 @@
         <div id="wxsGiftList" class="wxs-gift-grid"></div>
         <div id="wxsGiftEmpty" class="wxs-gift-empty" hidden></div>
     </dialog>
+
+    <div id="tpSheet" class="tp" hidden>
+        <div class="tp-back"></div>
+        <div class="tp-panel" id="tpPanel" role="dialog" aria-modal="true" aria-label="Пополнение">
+            <div class="tp-head"><div class="stk-grip" aria-hidden="true"></div></div>
+            <div class="tp-scroll">
+                <h3 class="tp-h">Выберите способ оплаты</h3>
+                <div class="tp-methods" id="tpMethods" role="group" aria-label="Способ оплаты"></div>
+                <h3 class="tp-h">Введите сумму пополнения</h3>
+                <div class="tp-amts" id="tpAmts"></div>
+                <label class="tp-input"><span class="tp-cur" id="tpInCur"></span><input id="tpInput" type="text" inputmode="decimal" autocomplete="off" placeholder="Своя сумма" aria-label="Сумма пополнения"></label>
+                <p class="tp-support">Пополнение не пришло?<br><b id="tpSupport">Напишите в поддержку</b></p>
+                <div class="tp-conv"><div class="tp-pill" id="tpFrom"></div><i>=</i><div class="tp-pill" id="tpTo"></div></div>
+            </div>
+            <button type="button" class="mines-main-btn tp-ok" id="tpPay">ПОПОЛНИТЬ</button>
+        </div>
+    </div>
     <div id="stkSheet" class="stk" hidden>
         <div class="stk-back"></div>
         <div class="stk-panel" id="stkPanel" role="dialog" aria-modal="true" aria-label="Твоя ставка">

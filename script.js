@@ -1902,7 +1902,7 @@ function paintProfile(p) {
   if (key !== lastProfileKey) {                    // не перерисовываем аватар без нужды
     lastProfileKey = key;
     setAvatar($('#tAv'), p.photo_url, name); setAvatar($('#av'), p.photo_url, name);
-    $('#tName').textContent = name; $('#un').textContent = name + (p.is_premium ? ' ★' : '');
+    $('#tName').textContent = name; $('#un').textContent = name + '';
     $('#uh').textContent = (p.username ? '@' + p.username + ' · ' : '') + 'ID ' + p.telegram_id;
   }
 }
@@ -2309,14 +2309,79 @@ rwDlg.addEventListener('cancel', (e) => { e.preventDefault(); closeSheet(rwDlg);
 
 /* ---- профиль ---- */
 $('#openInv').onclick = () => WXG.openInventory();
-$('#topup').onclick = async () => {
-  if (!lockEconomy()) return;
-  try {
-    const r = await crashRpc('demo_topup', {});
-    if (!r.ok) return showMessage(r.error);
-    setUIBalance(r.balance); toast('+' + fmt(r.added), 'win'); buzz('success');
-  } finally { unlockEconomy(); }
-};
+/* ---- пополнение (пока только визуал, без реальных платежей) ---- */
+(function topupSheet() {
+  const sheet = $('#tpSheet'), panel = $('#tpPanel'), input = $('#tpInput');
+  const FALLBACK = (bg, t) => 'data:image/svg+xml,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><rect width="48" height="48" rx="12" fill="${bg}"/><text x="24" y="30" text-anchor="middle" font-size="13" font-weight="800" fill="#fff" font-family="Arial">${t}</text></svg>`);
+  const IMG = (f, bg, t) => `<img src="${f}" alt="" draggable="false" onerror="this.onerror=null;this.src='${FALLBACK(bg, t)}'">`;
+  const GRAM = IMG('Gram.png', '#3b82f6', 'GRAM');
+  const USD = '<b class="tp-usd">$</b>';
+  const METHODS = [
+    { id: 'gram', name: 'GRAM', tag: '+15%', ico: IMG('Gram.png', '#3b82f6', 'GRAM'), amts: [1.51, 3.01, 7.51, 15.01, 30.02, 75.05], cur: GRAM, rate: 1.15 },
+    { id: 'nft', name: 'NFT', tag: '+10%', ico: IMG('NFT.png', '#ff7a3d', 'NFT'), amts: [5, 10, 25, 50, 100, 250], cur: USD, rate: 1.1 },
+    { id: 'xrocket', name: 'xRocket', ico: IMG('xRocket.png', '#7c5cff', 'xR'), amts: [1, 5, 10, 25, 50, 100], cur: USD, rate: 1 },
+    { id: 'cryptobot', name: 'CryptoBot', ico: IMG('Cryptobot.png', '#2fa5e8', 'CB'), amts: [1, 5, 10, 25, 50, 100], cur: USD, rate: 1 },
+  ];
+  const CHK = '<span class="tp-chk"><svg viewBox="0 0 12 12"><path d="M2 6.5l3 3 5-6"/></svg></span>';
+  let m = METHODS[0], amount = m.amts[1], timer = 0;
+  const num = (v) => (Math.round(v * 100) / 100).toString();
+
+  function paintAmount() {
+    $('#tpFrom').innerHTML = m.cur + '<span>' + (amount ? num(amount) : '0') + '</span>';
+    $('#tpTo').innerHTML = '<span>' + ((amount || 0) * m.rate).toFixed(2) + '</span><b class="tp-usd">$</b>';
+    $$('#tpAmts .tp-amt').forEach((b) => b.classList.toggle('on', Number(b.dataset.a) === amount && !input.value));
+  }
+  function render() {
+    $('#tpMethods').innerHTML = METHODS.map((x) =>
+      `<button type="button" class="tp-m${x === m ? ' on' : ''}" data-id="${x.id}">${x.tag ? `<em class="tp-tag">${x.tag}</em>` : ''}${CHK}<span class="tp-mi">${x.ico}</span><strong>${x.name}</strong></button>`).join('');
+    $('#tpAmts').innerHTML = m.amts.map((a) => `<button type="button" class="tp-amt" data-a="${a}">${m.cur}<span>${num(a)}</span></button>`).join('');
+    $('#tpInCur').innerHTML = m.cur;
+    paintAmount();
+  }
+  function open() {
+    clearTimeout(timer);
+    input.value = ''; m = METHODS[0]; amount = m.amts[1];
+    panel.style.transform = '';
+    render();
+    sheet.hidden = false; void sheet.offsetWidth; sheet.classList.add('open');
+  }
+  function close() {
+    sheet.classList.remove('open'); panel.style.transform = '';
+    try { input.blur(); } catch {}
+    clearTimeout(timer);
+    timer = setTimeout(() => { if (!sheet.classList.contains('open')) sheet.hidden = true; }, 280);
+  }
+  $('#tpOpen').onclick = () => { buzz('select'); open(); };
+  sheet.querySelector('.tp-back').addEventListener('click', close);
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !sheet.hidden) close(); });
+  $('#tpMethods').addEventListener('click', (e) => {
+    const b = e.target.closest('.tp-m'); if (!b) return;
+    m = METHODS.find((x) => x.id === b.dataset.id); amount = m.amts[1]; input.value = ''; buzz('select'); render();
+  });
+  $('#tpAmts').addEventListener('click', (e) => {
+    const b = e.target.closest('.tp-amt'); if (!b) return;
+    amount = Number(b.dataset.a); input.value = ''; buzz('select'); paintAmount();
+  });
+  input.addEventListener('input', () => {
+    let v = input.value.replace(',', '.').replace(/[^\d.]/g, '');
+    const i = v.indexOf('.');
+    if (i >= 0) v = v.slice(0, i + 1) + v.slice(i + 1).replace(/\./g, '').slice(0, 2);
+    if (v !== input.value) input.value = v;
+    amount = parseFloat(v) || 0; paintAmount();
+  });
+  input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); $('#tpPay').click(); } });
+  $('#tpSupport').onclick = () => toast('Поддержка пока не подключена');
+  $('#tpPay').onclick = () => {
+    if (!(amount > 0)) return showMessage('Введите сумму пополнения');
+    buzz('success'); toast('Пополнение скоро будет доступно'); close();
+  };
+  // свайп вниз по язычку закрывает шторку
+  const head = sheet.querySelector('.tp-head'); let y0 = null, dy = 0;
+  head.addEventListener('pointerdown', (e) => { y0 = e.clientY; dy = 0; head.setPointerCapture(e.pointerId); panel.classList.add('dragging'); });
+  head.addEventListener('pointermove', (e) => { if (y0 == null) return; dy = Math.max(0, e.clientY - y0); panel.style.transform = `translateY(${dy}px)`; });
+  const end = () => { if (y0 == null) return; y0 = null; panel.classList.remove('dragging'); if (dy > 90) close(); else panel.style.transform = ''; };
+  head.addEventListener('pointerup', end); head.addEventListener('pointercancel', end);
+})();
 
 /* ---- нижняя панель ---- */
 const PAGES = { cases: 'p-cases', up: 'upgraderPage', prof: 'p-prof' };
