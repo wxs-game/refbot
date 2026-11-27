@@ -1893,19 +1893,12 @@ function paintProfile(p) {
 
 /* ---- кейсы ---- */
 const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-let casesList = [];
-async function loadCases() {
-  const list = await publicRpc('list_cases');
-  if (Array.isArray(list) && list.length) casesList = list;
-  const box = $('#cases');
-  if (!casesList.length) { box.innerHTML = '<div class="empty">Не удалось загрузить кейсы. Переключите вкладку, чтобы повторить.</div>'; return; }
-  box.innerHTML = casesList.map((c) =>
-    `<div class="card case"><div class="em">${esc(c.emoji)}</div><b>${esc(c.name)}</b><i class="price">${fmt(c.cost)}</i>` +
-    `<button class="btn" data-c="${esc(c.id)}">Открыть</button></div>`).join('');
-}
-/* ---- экран кейса: состав, 1/2/3, открытие за $ ---- */
-const cvDlg = $('#caseView');
-let cv = { c: null, n: 1 };
+const csMoney = (n) => (Math.round((Number(n) || 0) * 100) / 100) + ' $';          // 25 $ · 0.5 $ · 47.9 $
+const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const CS_COLORS = ['#2fd36b', '#ffd23a', '#2f9bff', '#ff8a2a', '#ff4a5a', '#a35bff', '#22d3c5', '#ff5fb0'];
+let casesList = [], csTab = 'paid';
+const isFreeCase = (c) => Number(c.cost) === 0 || c.is_free === true || c.free === true;
+
 function normItems(c) {                      // состав берём с сервера (поля читаем с запасом по именам)
   const raw = c.items || c.gifts || c.contents || c.drops || [];
   const a = raw.map((it) => ({
@@ -1917,70 +1910,262 @@ function normItems(c) {                      // состав берём с се�
   a.forEach((x) => { if (x.chance == null && sw > 0) x.chance = x.weight / sw * 100; });
   return a.sort((p, q) => q.price - p.price);
 }
-function giftTile(it) {
-  const b = document.createElement('div'); b.className = 'cv-it';
-  const p = document.createElement('span'); p.className = 'cv-p'; p.textContent = it.price ? it.price.toFixed(2) + ' $' : '';
-  const im = document.createElement('span'); im.className = 'cv-im';
-  im.append(WXG.imageFor({ slug: it.slug, name: it.name }, true));
-  const ch = document.createElement('small');
-  ch.textContent = it.chance != null ? (+it.chance.toFixed(it.chance < 1 ? 2 : 1)) + '%' : '';
-  b.append(p, im, ch); return b;
+const giftImg = (it, lazy) => (window.WXG ? WXG.imageFor({ slug: it.slug, name: it.name }, lazy) : document.createElement('span'));
+
+/* ---- список кейсов: Платные / Бесплатные ---- */
+function caseCard(c, i) {
+  const b = document.createElement('button');
+  b.type = 'button'; b.className = 'cs-card'; b.dataset.c = c.id;
+  b.style.setProperty('--c1', CS_COLORS[(casesList.indexOf(c) + CS_COLORS.length) % CS_COLORS.length]);
+  b.style.setProperty('--i', Math.min(i, 8));
+  const chip = document.createElement('span'); chip.className = 'cs-chip';
+  chip.textContent = isFreeCase(c) ? 'Бесплатно' : csMoney(c.cost);
+  const art = document.createElement('span'); art.className = 'cs-art';
+  const top = normItems(c).slice(0, 3);
+  if (top.length) top.forEach((it, k) => { const w = document.createElement('i'); w.className = 'p' + k; w.append(giftImg(it, true)); art.append(w); });
+  else { const e = document.createElement('em'); e.className = 'cs-emoji'; e.textContent = c.emoji || '🎁'; art.append(e); }
+  b.append(chip, art);
+  if (c.is_new || c.new || c.badge === 'new') { const r = document.createElement('u'); r.className = 'cs-new'; r.textContent = 'NEW'; b.append(r); }
+  b.setAttribute('aria-label', c.name + ', ' + chip.textContent);
+  return b;
 }
-function renderCaseView() {
-  const c = cv.c, items = normItems(c);
-  $('#cvTitle').textContent = c.name;
-  $('#cvStrip').replaceChildren(...items.map(giftTile));
-  $('#cvGrid').replaceChildren(...items.map(giftTile));
-  $('#cvEmpty').hidden = items.length > 0;
+function renderCases(swap) {
+  const box = $('#cases');
+  if (!casesList.length) { box.innerHTML = '<div class="empty">Не удалось загрузить кейсы. Переключите вкладку, чтобы повторить.</div>'; return; }
+  const list = casesList.filter((c) => isFreeCase(c) === (csTab === 'free'));
+  if (!list.length) { box.innerHTML = '<div class="empty">' + (csTab === 'free' ? 'Бесплатных кейсов пока нет.' : 'Платных кейсов пока нет.') + '</div>'; return; }
+  const frag = document.createDocumentFragment();
+  list.forEach((c, i) => frag.append(caseCard(c, i)));
+  box.replaceChildren(frag);
+  if (swap) { box.classList.remove('swap'); void box.offsetWidth; box.classList.add('swap'); }
+}
+async function loadCases() {
+  const list = await publicRpc('list_cases');
+  if (Array.isArray(list) && list.length) casesList = list;
+  renderCases(true);
+}
+$('#csTabs').addEventListener('click', (e) => {
+  const b = e.target.closest('button'); if (!b || b.dataset.k === csTab) return;
+  csTab = b.dataset.k; buzz('select');
+  $$('#csTabs button').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+  renderCases(true);
+});
+
+/* ---- аккуратное закрытие шторок (с анимацией) ---- */
+function closeSheet(d) {
+  if (!d.open || d.classList.contains('closing')) return;
+  d.classList.add('closing');
+  let done = false;
+  const fin = () => { if (done) return; done = true; d.classList.remove('closing'); if (d.open) d.close(); };
+  d.addEventListener('animationend', (e) => { if (e.target === d) fin(); });
+  setTimeout(fin, 340);
+}
+const outside = (d, e) => { const r = d.getBoundingClientRect(); return e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom; };
+
+/* ---- конфетти ---- */
+function confetti() {
+  if (REDUCED) return;
+  const el = $('#confetti'), cvs = $('#confettiCv'), ctx = cvs.getContext('2d');
+  const dpr = Math.min(devicePixelRatio || 1, 2), W = innerWidth, H = innerHeight;
+  cvs.width = W * dpr; cvs.height = H * dpr; ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  try { if (!el.matches(':popover-open')) el.showPopover(); } catch (_) {}
+  const cols = ['#3b82f6', '#ffd23a', '#ff4a5a', '#2fd36b', '#a35bff', '#ff8a2a', '#22d3c5'];
+  const ps = Array.from({ length: 90 }, (_, i) => ({
+    x: W * (.2 + Math.random() * .6), y: H * .66, vx: (Math.random() - .5) * 9, vy: -(7 + Math.random() * 10),
+    g: .34 + Math.random() * .1, r: Math.random() * 6.28, vr: (Math.random() - .5) * .35,
+    w: 5 + Math.random() * 6, h: 3 + Math.random() * 5, c: cols[i % cols.length], life: 0, max: 80 + Math.random() * 50
+  }));
+  cancelAnimationFrame(confetti.raf);
+  let last = performance.now();
+  const step = (now) => {
+    const k = Math.min(2.5, (now - last) / 16.67); last = now;
+    ctx.clearRect(0, 0, W, H);
+    let alive = 0;
+    for (const p of ps) {
+      p.life += k; if (p.life > p.max) continue; alive++;
+      p.vy += p.g * k; p.vx *= Math.pow(.992, k); p.x += p.vx * k; p.y += p.vy * k; p.r += p.vr * k;
+      ctx.save(); ctx.globalAlpha = Math.max(0, Math.min(1, (p.max - p.life) / 25));
+      ctx.translate(p.x, p.y); ctx.rotate(p.r); ctx.fillStyle = p.c; ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h); ctx.restore();
+    }
+    if (alive) confetti.raf = requestAnimationFrame(step);
+    else { ctx.clearRect(0, 0, W, H); try { el.hidePopover(); } catch (_) {} }
+  };
+  confetti.raf = requestAnimationFrame(step);
+}
+
+/* ---- экран кейса: барабаны, 1/2/3, открытие за $ и демо ---- */
+const cvDlg = $('#caseView'), cvReels = $('#cvReels'), cvGo = $('#cvGo');
+const GAP = 8, IDLE = 8, IDLE_C = 3, FILL = 24;
+let cv = { c: null, n: 1, demo: false, busy: false, pool: [], rows: [], iw: 110, rowW: 320, dirty: false };
+const rnd = (a) => a[Math.floor(Math.random() * a.length)];
+function pickWeighted(items) {
+  const w = items.map((x) => (x.chance != null ? x.chance : x.weight) || 0), sum = w.reduce((s, x) => s + x, 0);
+  if (!(sum > 0)) return rnd(items);
+  let r = Math.random() * sum;
+  for (let i = 0; i < items.length; i++) { r -= w[i]; if (r <= 0) return items[i]; }
+  return items[items.length - 1];
+}
+function tile(it) {
+  const b = document.createElement('div'); b.className = 'cv-it';
+  const p = document.createElement('span'); p.className = 'cv-p'; p.textContent = it.price ? csMoney(it.price) : '';
+  const im = document.createElement('span'); im.className = 'cv-im'; im.append(giftImg(it, false));
+  b.append(p, im); return b;
+}
+const centerX = (idx, jit) => cv.rowW / 2 - (idx * (cv.iw + GAP) + cv.iw / 2) + (jit || 0);
+const setX = (el, x) => { el.style.transform = 'translate3d(' + x + 'px,0,0)'; };
+
+function buildRows() {
+  cvReels.replaceChildren();
+  cv.rows = [0, 1, 2].map((i) => {
+    const el = document.createElement('div'); el.className = 'cv-row'; el.style.setProperty('--i', i);
+    const track = document.createElement('div'); track.className = 'cv-track';
+    el.append(track); cvReels.append(el);
+    return { el, track, items: [] };
+  });
+}
+function measure() {
+  cv.rowW = cvReels.clientWidth || 320;
+  cv.iw = Math.round(cv.rowW * 0.335);
+  cvReels.style.setProperty('--iw', cv.iw + 'px');
+}
+function fillIdle(i) {
+  const r = cv.rows[i];
+  r.items = Array.from({ length: IDLE }, () => rnd(cv.pool));
+  r.track.replaceChildren(...r.items.map(tile));
+  r.el.classList.remove('done');
+  setX(r.track, centerX(IDLE_C));
+}
+function idleAll() { cv.rows.forEach((_, i) => fillIdle(i)); cv.dirty = false; }
+function syncRows() {
+  cvReels.style.setProperty('--n', cv.n);
+  cv.rows.forEach((r, i) => r.el.classList.toggle('off', i >= cv.n));
+  $('#cvQty').style.setProperty('--k', cv.n - 1);
   $$('#cvQty button').forEach((b) => b.setAttribute('aria-pressed', String(+b.dataset.n === cv.n)));
-  $('#cvGo').textContent = 'Открыть за ' + fmt(c.cost * cv.n);
+  syncGo();
+}
+function syncGo() {
+  const c = cv.c; if (!c) return;
+  cvGo.classList.toggle('busy', cv.busy); cvGo.disabled = cv.busy;
+  cvDlg.classList.toggle('is-busy', cv.busy);
+  if (cv.busy) { cvGo.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.6-5.9M20 4v4.5h-4.5"/></svg>'; cvGo.setAttribute('aria-label', 'Идёт открытие'); return; }
+  cvGo.removeAttribute('aria-label');
+  cvGo.textContent = cv.demo ? 'Демо прокрут' : (isFreeCase(c) ? 'Открыть бесплатно' : 'Открыть за ' + csMoney(c.cost * cv.n));
+}
+function openCase(c) {
+  cv = { c, n: 1, demo: false, busy: false, pool: normItems(c), rows: [], iw: 110, rowW: 320, dirty: false };
+  if (!cv.pool.length) cv.pool = [{ slug: '', name: '', price: 0, chance: null, weight: 1 }];
+  $('#cvTitle').textContent = c.name;
+  $('#cvDemo').setAttribute('aria-pressed', 'false');
+  const items = normItems(c);
+  $('#cvGrid').replaceChildren(...items.map(tile));
+  $('#cvEmpty').hidden = items.length > 0;
+  $('#cvScroll').scrollTop = 0;
+  cvReels.style.transition = 'none';
+  if (!cvDlg.open) cvDlg.showModal();
+  buildRows(); measure(); idleAll(); syncRows();
+  requestAnimationFrame(() => requestAnimationFrame(() => { cvReels.style.transition = ''; }));
 }
 $('#cases').addEventListener('click', (e) => {
   const b = e.target.closest('[data-c]'); if (!b) return;
-  const c = casesList.find((x) => x.id === b.dataset.c); if (!c) return;
-  cv = { c, n: 1 }; renderCaseView(); buzz('light');
-  if (!cvDlg.open) cvDlg.showModal();
-  $('#cvStrip').scrollLeft = 0;
+  const c = casesList.find((x) => String(x.id) === b.dataset.c); if (!c) return;
+  buzz('light'); openCase(c);
 });
 $('#cvQty').addEventListener('click', (e) => {
-  const b = e.target.closest('button'); if (!b) return;
-  cv.n = +b.dataset.n; buzz('select'); renderCaseView();
+  const b = e.target.closest('button'); if (!b || cv.busy || +b.dataset.n === cv.n) return;
+  cv.n = +b.dataset.n; buzz('select');
+  if (cv.dirty) idleAll();
+  syncRows();
 });
-$('#cvClose').onclick = () => cvDlg.close();
-cvDlg.addEventListener('click', (e) => { if (e.target === cvDlg) cvDlg.close(); });
-$('#cvGo').addEventListener('click', async () => {
-  const c = cv.c, n = cv.n, go = $('#cvGo');
+$('#cvDemo').addEventListener('click', (e) => {
+  if (cv.busy) return;
+  cv.demo = !cv.demo; buzz('select');
+  e.currentTarget.setAttribute('aria-pressed', String(cv.demo)); syncGo();
+});
+$('#cvClose').onclick = () => { if (!cv.busy) closeSheet(cvDlg); };
+cvDlg.addEventListener('click', (e) => { if (!cv.busy && e.target === cvDlg && outside(cvDlg, e)) closeSheet(cvDlg); });
+cvDlg.addEventListener('cancel', (e) => { e.preventDefault(); if (!cv.busy) closeSheet(cvDlg); });
+addEventListener('resize', () => { if (cvDlg.open && !cv.busy) { measure(); idleAll(); } });
+
+function spinRow(i, win, delay) {                    // один барабан: выигрыш лежит на фиксированной позиции ленты
+  const r = cv.rows[i], W = IDLE + FILL;
+  const extra = [];
+  for (let k = IDLE; k < W; k++) extra.push(rnd(cv.pool));
+  extra.push(win); for (let k = 0; k < 4; k++) extra.push(rnd(cv.pool));
+  r.track.append(...extra.map(tile));                // первые IDLE плиток уже на экране — рывка нет
+  const from = centerX(IDLE_C), to = centerX(W, (Math.random() - .5) * cv.iw * .5);
+  const dur = REDUCED ? 500 : 4200 + i * 420;
+  const anim = r.track.animate(
+    [{ transform: 'translate3d(' + from + 'px,0,0)' }, { transform: 'translate3d(' + to + 'px,0,0)' }],
+    { duration: dur, delay: REDUCED ? 0 : delay, easing: 'cubic-bezier(.14,.62,.08,1)', fill: 'both' });
+  return anim.finished.then(() => {
+    setX(r.track, to); anim.cancel();
+    r.track.children[W].classList.add('win'); r.el.classList.add('done');
+  });
+}
+async function runSpin(wins) {
+  cv.dirty = true;
+  buzz('medium');
+  await Promise.all(wins.map((w, i) => spinRow(i, w, i * 140)));
+  buzz('success');
+}
+cvGo.addEventListener('click', async () => {
+  if (cv.busy) return;
+  const c = cv.c, n = cv.n, demo = cv.demo;
+  if (cv.dirty) { idleAll(); await new Promise((r) => requestAnimationFrame(r)); }
+  if (demo) {
+    cv.busy = true; syncGo();
+    try {
+      const wins = Array.from({ length: n }, () => pickWeighted(cv.pool));
+      await runSpin(wins);
+      await new Promise((r) => setTimeout(r, 450));
+      showReward(wins, true);
+    } finally { cv.busy = false; syncGo(); }
+    return;
+  }
   if (c.cost * n > currentBalance + 1e-9) return showMessage('Недостаточно средств для открытия кейса.');
   if (!lockEconomy()) return toast('Подождите, идёт другая операция');
-  go.disabled = true; buzz('medium');
-  const strip = $('#cvStrip');
-  strip.scrollTo({ left: Math.random() * strip.scrollWidth, behavior: 'smooth' });
-  const got = [];
+  cv.busy = true; syncGo(); buzz('medium');
+  let balance = null; const got = [];
   try {
-    for (let i = 0; i < n; i++) {             // каждый кейс — отдельный идемпотентный запрос
-      const r = await crashRpc('case_open', { p_case: c.id, p_request: crypto.randomUUID() });
-      if (!r.ok) { showMessage(r.error); break; }
-      setUIBalance(r.balance); got.push(r);
+    for (let i = 0; i < n; i++) {                    // каждый кейс — отдельный идемпотентный запрос
+      let r; try { r = await crashRpc('case_open', { p_case: c.id, p_request: crypto.randomUUID() }); } catch (e) { r = { ok: false, error: 'Ошибка сети' }; }
+      if (!r || !r.ok) { showMessage((r && r.error) || 'Не удалось открыть кейс'); break; }
+      balance = r.balance; got.push(r);
     }
-  } finally { go.disabled = false; unlockEconomy(); }
-  if (got.length) { showReward(got); if (window.WXG) WXG.refreshAlways(); }
+    if (got.length) {
+      const wins = got.map((r) => ({ slug: r.gift_slug, name: r.name || (window.WXG ? WXG.giftBy(r.gift_slug).name : r.gift_slug), price: Number(r.price) || 0 }));
+      await runSpin(wins);
+      if (balance != null) setUIBalance(balance);     // баланс обновляется только после прокрута
+      await new Promise((r) => setTimeout(r, 450));
+      showReward(wins, false);
+    } else if (balance != null) setUIBalance(balance);
+  } finally { cv.busy = false; unlockEconomy(); syncGo(); if (window.WXG && got.length) WXG.refreshAlways(); }
 });
-function showReward(list) {
-  const rs = [].concat(list), art = $('#rwArt');
-  art.classList.toggle('multi', rs.length > 1);
-  art.replaceChildren(...rs.map((r) => {
-    const img = WXG.imageFor({ slug: r.gift_slug, name: r.name }, false);
-    if (rs.length < 2) return img;
-    const s = document.createElement('span'); s.append(img); return s;
+
+/* ---- «Поздравляем!» ---- */
+const rwDlg = $('#reward');
+function showReward(wins, demo) {
+  $('#rwTag').hidden = !demo; $('#rwInv').hidden = demo;
+  $('#rwList').replaceChildren(...wins.map((w, i) => {
+    const row = document.createElement('div'); row.className = 'rwd-row'; row.style.setProperty('--i', i);
+    const im = document.createElement('span'); im.className = 'rwd-img'; im.append(giftImg(w, false));
+    const tx = document.createElement('span'); tx.className = 'rwd-tx';
+    const nm = document.createElement('b'); nm.textContent = w.name || '';
+    const pr = document.createElement('small'); pr.textContent = demo ? 'demo' : csMoney(w.price);
+    tx.append(nm, pr); row.append(im, tx);
+    if (!demo) { const v = document.createElement('i'); v.className = 'rwd-pr'; v.textContent = csMoney(w.price); row.append(v); pr.hidden = true; }
+    return row;
   }));
-  $('#rwName').textContent = rs.length > 1 ? 'Выпало: ' + rs.length : (rs[0].name || WXG.giftBy(rs[0].gift_slug).name);
-  $('#rwPrice').textContent = fmt(rs.reduce((s, r) => s + (Number(r.price) || 0), 0));
-  const d = $('#reward'); if (!d.open) d.showModal();
-  buzz('heavy');
+  $('#rwTotal').textContent = !demo && wins.length > 1 ? 'Итого: ' + csMoney(wins.reduce((s, w) => s + (Number(w.price) || 0), 0)) : '';
+  $('#rwTotal').hidden = !$('#rwTotal').textContent;
+  if (!rwDlg.open) rwDlg.showModal();
+  buzz('heavy'); confetti();
 }
-$('#rwClose').onclick = () => $('#reward').close();
-$('#rwInv').onclick = () => { $('#reward').close(); cvDlg.close(); WXG.openInventory(); };
-$('#reward').addEventListener('click', (e) => { if (e.target.id === 'reward') e.target.close(); });
+rwDlg.addEventListener('close', () => { if (cvDlg.open) { idleAll(); } });
+$('#rwClose').onclick = () => closeSheet(rwDlg);
+$('#rwInv').onclick = () => { closeSheet(rwDlg); closeSheet(cvDlg); setTimeout(() => WXG.openInventory(), 260); };
+rwDlg.addEventListener('click', (e) => { if (e.target === rwDlg && outside(rwDlg, e)) closeSheet(rwDlg); });
+rwDlg.addEventListener('cancel', (e) => { e.preventDefault(); closeSheet(rwDlg); });
 
 /* ---- профиль ---- */
 $('#openInv').onclick = () => WXG.openInventory();

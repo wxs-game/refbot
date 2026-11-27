@@ -21,8 +21,11 @@
  </header>
 
  <section class="page hidden" id="p-cases">
-  <h2>КЕЙСЫ</h2>
-  <div class="grid" id="cases"><div class="empty">Загрузка…</div></div>
+  <div class="cs-tabs" id="csTabs" role="group" aria-label="Тип кейсов">
+   <button type="button" data-k="paid" aria-pressed="true">Платные</button>
+   <button type="button" data-k="free" aria-pressed="false">Бесплатные</button>
+  </div>
+  <div class="cs-grid" id="cases"><div class="empty">Загрузка…</div></div>
  </section>
 
  <!-- ==================== АПГРЕЙДЕР ==================== -->
@@ -71,12 +74,13 @@
   <button class="btn ghost" id="topup" type="button">Пополнить +25 $ (демо)</button>
  </section>
 
- <dialog id="reward" class="reward">
-  <div class="rw-art" id="rwArt"></div>
-  <div class="rw-name" id="rwName"></div>
-  <div class="rw-price" id="rwPrice"></div>
-  <button class="btn" id="rwInv" type="button">В инвентарь</button>
-  <button class="btn ghost" id="rwClose" type="button">Закрыть</button>
+ <dialog id="reward" class="wxs-sheet rwd" aria-labelledby="rwTitle">
+  <div class="wxs-sheet-grip" aria-hidden="true"></div>
+  <div class="cv-top"><span class="cv-pill" id="rwTitle">Поздравляем!</span><span class="cv-pill cv-tag" id="rwTag" hidden>demo</span></div>
+  <div class="rwd-list" id="rwList"></div>
+  <div class="rwd-total" id="rwTotal"></div>
+  <button class="cv-go" id="rwClose" type="button">Ок</button>
+  <button class="cv-go ghost" id="rwInv" type="button">В инвентарь</button>
  </dialog>
 
     <dialog id="wxsGiftDialog" class="wxs-sheet" aria-labelledby="wxsGiftTitle">
@@ -116,16 +120,24 @@
 
  <dialog id="caseView" class="wxs-sheet cv" aria-labelledby="cvTitle">
   <div class="wxs-sheet-grip" aria-hidden="true"></div>
-  <header><div class="wxs-sheet-title"><h2 id="cvTitle"></h2></div><button type="button" id="cvClose" aria-label="Закрыть">×</button></header>
-  <div class="cv-stripwrap"><div id="cvStrip" class="cv-strip"></div><i class="cv-mk t"></i><i class="cv-mk b"></i></div>
-  <div id="cvQty" class="cv-qty" role="group" aria-label="Сколько кейсов открыть">
-   <button type="button" data-n="1">1</button><button type="button" data-n="2">2</button><button type="button" data-n="3">3</button>
+  <div class="cv-top">
+   <span class="cv-pill" id="cvTitle"></span>
+   <button type="button" class="cv-pill cv-demo" id="cvDemo" aria-pressed="false">Демо</button>
   </div>
-  <h3 class="cv-h">Наличие</h3>
-  <div id="cvGrid" class="cv-grid"></div>
-  <p id="cvEmpty" class="cv-empty" hidden>Состав кейса пока недоступен.</p>
-  <div class="cv-bar"><button type="button" id="cvGo" class="mines-main-btn"></button></div>
+  <div id="cvReels" class="cv-reels" style="--n:1"></div>
+  <div id="cvQty" class="cv-qty" role="group" aria-label="Сколько кейсов открыть" style="--k:0">
+   <i class="cv-qthumb" aria-hidden="true"></i>
+   <button type="button" data-n="1" aria-pressed="true">1</button><button type="button" data-n="2" aria-pressed="false">2</button><button type="button" data-n="3" aria-pressed="false">3</button>
+  </div>
+  <div class="cv-scroll" id="cvScroll">
+   <h3 class="cv-h">Наличие</h3>
+   <div id="cvGrid" class="cv-grid"></div>
+   <p id="cvEmpty" class="cv-empty" hidden>Состав кейса пока недоступен.</p>
+  </div>
+  <div class="cv-bar"><button type="button" id="cvGo" class="cv-go"></button></div>
+  <button type="button" id="cvClose" class="cv-x" aria-label="Закрыть" tabindex="-1">×</button>
  </dialog>
+ <div id="confetti" popover="manual" aria-hidden="true"><canvas id="confettiCv"></canvas></div>
 
  <nav id="nav">
   <div id="pill"></div>
