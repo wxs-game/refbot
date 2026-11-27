@@ -2402,8 +2402,21 @@ let tcui = null;
 function tonUI() {
   if (tcui) return tcui;
   if (!window.TON_CONNECT_UI) return null;
-  tcui = new TON_CONNECT_UI.TonConnectUI({ manifestUrl: TONCONNECT_MANIFEST_URL });
+  // Создаём портал сами: он не может оказаться под шторкой пополнения.
+  if (!document.getElementById('tc-widget-root')) {
+    const root = document.createElement('div'); root.id = 'tc-widget-root'; document.body.append(root);
+  }
+  tcui = new TON_CONNECT_UI.TonConnectUI({ manifestUrl: TONCONNECT_MANIFEST_URL, widgetRootId: 'tc-widget-root' });
   return tcui;
+}
+async function restoreTonConnection(ui) {
+  // После возврата из кошелька SDK восстанавливает сессию асинхронно.
+  // Без ожидания приложение ошибочно просило подключиться повторно.
+  if (!ui || !ui.connectionRestored) return;
+  await Promise.race([
+    Promise.resolve(ui.connectionRestored).catch(() => null),
+    new Promise((resolve) => setTimeout(resolve, 4500)),
+  ]);
 }
 function commentBoc(text) {                                    // BOC одной ячейки: 32 бита 0 + UTF-8 комментарий
   const t = new TextEncoder().encode(text), len = 4 + t.length;
@@ -2459,11 +2472,12 @@ function openPayLink(url) {
     render(); loadRate();
     sheet.hidden = false; void sheet.offsetWidth; sheet.classList.add('open');
   }
-  function close() {
+  function close(immediate) {
     sheet.classList.remove('open'); panel.style.transform = '';
     try { input.blur(); } catch {}
     clearTimeout(timer);
-    timer = setTimeout(() => { if (!sheet.classList.contains('open')) sheet.hidden = true; }, 280);
+    if (immediate) sheet.hidden = true;
+    else timer = setTimeout(() => { if (!sheet.classList.contains('open')) sheet.hidden = true; }, 280);
   }
   $('#tpOpen').onclick = () => { buzz('select'); open(); };
   sheet.querySelector('.tp-back').addEventListener('click', close);
@@ -2493,7 +2507,12 @@ function openPayLink(url) {
     if (m.id === 'ton') {
       ui = tonUI();
       if (!ui) return showMessage('TonConnect не загрузился. Обновите страницу.');
-      if (!ui.connected) { close(); setTimeout(() => ui.openModal(), 300); return toast('Подключите кошелёк и нажмите «Пополнить» ещё раз'); }
+      await restoreTonConnection(ui);
+      if (!ui.connected) {
+        close(true);
+        setTimeout(() => ui.openModal().catch(() => showMessage('Не удалось открыть TonConnect. Попробуйте ещё раз.')), 50);
+        return toast('Подключите кошелёк и нажмите «Пополнить» ещё раз');
+      }
     }
     payBusy = true; payBtn.disabled = true; buzz('medium');
     try {
