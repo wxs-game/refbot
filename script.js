@@ -1707,12 +1707,8 @@ function upgSyncBetInput() {
         else if (!referralGift) { withdraw.disabled = true; withdraw.textContent = 'Вывести'; }
         else {
             const q = Number(referral?.qualified_referrals || 0), need = Number(referral?.required_referrals || 4);
-            withdraw.textContent = q >= need ? 'Вывести' : 'Вывести · ' + q + '/' + need + ' рефералов'; withdraw.disabled = q < need;
-            withdraw.addEventListener('click', async () => {
-                if (busy || withdraw.disabled) return; busy = true; withdraw.disabled = true;
-                try { const r = await rpc('gift_withdraw_request', { p_request: item.id }); if (!r.ok) return showMessage(r.error || 'Вывод пока недоступен'); await refreshLive(); view = 'inventory'; renderDialog(); }
-                catch (e) { showMessage('Не удалось создать заявку на вывод. Попробуйте позже.'); } finally { busy = false; }
-            });
+            withdraw.textContent = 'Вывести';
+            withdraw.addEventListener('click', () => { view = 'withdraw'; renderDialog(); });
         }
         const info = document.createElement('p'); info.className = 'wxs-ref-info';
         if (waiting) info.textContent = 'Заявка принята. Подарок ожидает отправки и больше недоступен для продажи или ставок.';
@@ -1726,9 +1722,35 @@ function upgSyncBetInput() {
         itemBox.replaceChildren(img, name, price, up, sl, withdraw, info);
     }
 
+    function shareReferral() {
+        const link = referral?.referral_link;
+        if (!link) return;
+        const share = 'https://t.me/share/url?url=' + encodeURIComponent(link) + '&text=' + encodeURIComponent('Заходи в RocketUP по моей ссылке');
+        if (tg?.openTelegramLink) tg.openTelegramLink(share); else navigator.clipboard?.writeText(link).then(() => toast('Ссылка скопирована'));
+    }
+    function renderWithdraw() {
+        const item = inventory.find((i) => i.id === itemId);
+        if (!item || !isReferralGift(item)) { view = 'inventory'; return renderDialog(); }
+        const q = Number(referral?.qualified_referrals || 0), need = Number(referral?.required_referrals || 4);
+        const img = document.createElement('div'); img.className = 'wxs-item-img wxs-withdraw-art'; img.append(imageFor(item, false));
+        const title = document.createElement('h3'); title.textContent = 'Подарок за друзей';
+        const gift = document.createElement('p'); gift.className = 'wxs-withdraw-gift'; gift.textContent = item.name + ' · ' + money(usd(item));
+        const progress = document.createElement('div'); progress.className = 'wxs-ref-progress';
+        const label = document.createElement('b'); label.textContent = q + ' из ' + need + ' друзей подтверждены';
+        const dots = document.createElement('div'); dots.className = 'wxs-ref-dots';
+        for (let n = 0; n < need; n++) { const dot = document.createElement('i'); if (n < q) dot.className = 'done'; dots.append(dot); }
+        progress.append(label, dots);
+        const rules = document.createElement('ol'); rules.className = 'wxs-withdraw-rules';
+        ['Приглашённый должен перейти по вашей ссылке и написать боту /start.', 'Реферал засчитывается после подтверждения Telegram Premium. Проверка NFT-подарков Telegram требует отдельной проверки.', 'После 4 подтверждённых рефералов отправьте заявку. Подарок исчезнет из ставок и продажи, а статус станет «Ожидание».'].forEach((text) => { const li = document.createElement('li'); li.textContent = text; rules.append(li); });
+        const invite = document.createElement('button'); invite.type = 'button'; invite.className = 'wxs-invite'; invite.textContent = 'Пригласить друзей'; invite.onclick = shareReferral;
+        const submit = document.createElement('button'); submit.type = 'button'; submit.className = 'wxs-item-btn is-gold wxs-withdraw-submit'; submit.textContent = q >= need ? 'Отправить заявку на вывод' : 'Нужно ещё ' + (need - q) + ' реферал(а)'; submit.disabled = q < need;
+        submit.onclick = async () => { if (busy || submit.disabled) return; busy = true; submit.disabled = true; try { const r = await rpc('gift_withdraw_request', { p_request: item.id }); if (!r.ok) return showMessage(r.error || 'Вывод пока недоступен'); await refreshLive(); view = 'inventory'; renderDialog(); } catch (_) { showMessage('Не удалось создать заявку на вывод. Попробуйте позже.'); } finally { busy = false; } };
+        itemBox.replaceChildren(img, title, gift, progress, rules, invite, submit);
+    }
+
     function renderDialog() {
         const sub = $('wxsGiftSub');
-        const isItem = view === 'item';
+        const isItem = view === 'item' || view === 'withdraw';
         const isInventory = view === 'inventory' || view === 'stake';
         const inventoryStatus = isInventory && (liveLoad && !inventoryLoaded ? 'Загружаем подарки…'
             : lastErr && !liveLoad ? 'Не удалось обновить инвентарь' : '');
@@ -1738,10 +1760,10 @@ function upgSyncBetInput() {
         list.hidden = isItem;
         search.hidden = isItem || (view !== 'catalog' && !visibleInventory().length);
         if (isItem) {
-            $('wxsGiftTitle').textContent = 'Подарок';
+            $('wxsGiftTitle').textContent = view === 'withdraw' ? 'Условия вывода' : 'Подарок';
             sub.textContent = '';
             empty.hidden = true;
-            return renderItem();
+            return view === 'withdraw' ? renderWithdraw() : renderItem();
         }
         const q = search.value.trim().toLocaleLowerCase();
         let items;
@@ -1794,7 +1816,7 @@ function upgSyncBetInput() {
 
     $('wxsGiftClose').addEventListener('click', () => dlg.close());
     retry.addEventListener('click', refreshLive);
-    back.addEventListener('click', () => openDialog('inventory'));
+    back.addEventListener('click', () => { if (view === 'withdraw') { view = 'item'; renderDialog(); } else openDialog('inventory'); });
     dlg.addEventListener('click', (e) => { if (e.target === dlg) dlg.close(); });
     search.addEventListener('input', () => { anchorUntil = 0; renderDialog(); });
     ['touchstart', 'wheel', 'pointerdown'].forEach((ev) => list.addEventListener(ev, () => { anchorUntil = 0; }, { passive: true }));
