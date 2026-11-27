@@ -1941,10 +1941,10 @@ function normItems(c) {                      // состав берём с се�
   return a.sort((p, q) => q.price - p.price);
 }
 const isCash = (it) => /^cash/.test((it && it.slug) || '');
-/* денежный дроп: money.tgs (gzip-Lottie) из корня; файл читаем один раз и кэшируем */
+/* денежный дроп: sticker.tgs (gzip-Lottie) из корня; файл читаем один раз и кэшируем */
 let moneyData = null;
 function loadMoney() {
-  return moneyData || (moneyData = fetch('money.tgs').then((r) => { if (!r.ok) throw 0; return new Response(r.body.pipeThrough(new DecompressionStream('gzip'))).json(); }));
+  return moneyData || (moneyData = fetch("sticker.tgs").then((r) => { if (!r.ok) throw 0; return new Response(r.body.pipeThrough(new DecompressionStream('gzip'))).json(); }));
 }
 function cashAnim(play) {
   const box = document.createElement('span');
