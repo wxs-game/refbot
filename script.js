@@ -1116,17 +1116,22 @@ function upgSyncBetInput() {
         ['lootbag', 'Loot Bag', 159], ['astralshard', 'Astral Shard', 167]
     ];
     let prices = new Map(snapshot.map(([slug, name, price]) => [slug, { slug, name, price }]));
+    // Запасные цены в центах (последний срез). Работают, пока нет ни ответа сервера, ни живого флора из сети.
+    const FALLBACK_CENTS = Object.fromEntries(`xmasstocking:514, candycane:514, lolpop:514, cookieheart:617, stellarrocket:617, lightsword:720, bowtie:720, moonpendant:823, snowglobe:823, bunnymuffin:1028, finepen:1028, hangingstar:1131, tophat:1234, lovecandle:1337, sakuraflower:1439, recordplayer:1542, lovepotion:1851, cupidcharm:2982, rarebird:3393, toybear:4113, diamondring:4216, genielamp:4524, swisswatch:7403, lootbag:16348, astralshard:17171`.split(',').map((x) => x.trim().split(':')).map(([k, v]) => [k, Number(v)]));
+    let pricesLive = false;            // true, когда флор успешно подтянут из интернета
     const listed = new Map();
     let serverCatalog = new Map();     // slug → цена в центах (с сервера)
     let liveOffers = new Map();
     let inventory = [];
     let inventoryLoaded = false, inventoryRevision = 0;
     let lastErr = '', liveReady = false, liveLoad = null, loadedAt = 0, catalogAsked = false, priceReq = null, rateAsked = false;
-    let catalogMin = null, targetSlug = null, view = 'catalog', pending = null, stakeId = null, cashCents = null, itemId = null, busy = false, stakeKey = '';
+    let anchorUntil = 0, catalogMin = null, targetSlug = null, view = 'catalog', pending = null, stakeId = null, cashCents = null, itemId = null, busy = false, stakeKey = '';
     const roundKey = 'wxs-gift-round:' + (tgApp?.initDataUnsafe?.user?.id ?? 'anon');
     try { pending = JSON.parse(sessionStorage.getItem(roundKey) || 'null'); } catch { pending = null; }
     targetSlug = pending?.slug || null;
 
+    G.priceCents = (slug) => { const c = centsOf(giftBy(slug)); return Number.isFinite(c) ? c : null; };
+    G.refreshPrices = () => { refreshPrices(); fetchRate(); };
     const pretty = (slug) => slug ? slug.charAt(0).toUpperCase() + slug.slice(1) : '';
     const giftBy = (slug) => prices.get(slug) || listed.get(slug) || { slug, name: pretty(slug) };
     const offerOf = (slug) => {
@@ -1138,6 +1143,7 @@ function upgSyncBetInput() {
         if (o) return o.price_cents;
         const c = serverCatalog.get(g.slug);
         if (c) return c;
+        if (!pricesLive && FALLBACK_CENTS[g.slug]) return FALLBACK_CENTS[g.slug];
         return Number.isFinite(g.price) ? Math.max(100, Math.round(g.price * gramUsd * DISCOUNT * 100)) : null;
     };
     const usd = (g) => { const c = centsOf(g); return c == null ? null : c / 100; };
@@ -1162,7 +1168,7 @@ function upgSyncBetInput() {
         try {
             const r = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=the-open-network&vs_currencies=usd', { signal: AbortSignal.timeout(5000) });
             const v = (await r.json())?.['the-open-network']?.usd;
-            if (Number.isFinite(v) && v > 0.05 && v < 50 && !rateFromServer) { gramUsd = v; paint(); }
+            if (Number.isFinite(v) && v > 0.05 && v < 50 && !rateFromServer) { gramUsd = v; paint(); G.onPrices?.(); }
         } catch { /* остаётся запасной курс */ }
     }
 
@@ -1235,7 +1241,7 @@ function upgSyncBetInput() {
             const date = cells[di], slug = cells[si]?.toLowerCase().replace(/[^a-z0-9]/g, ''), name = cells[ni], price = Number(cells[pi]);
             if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !slug || !name || !(price > 0)) continue;
             if ((latest.get(slug)?.date ?? '') > date) continue;
-            latest.set(slug, { slug, name, price, date });
+            latest.set(slug, { slug, name: singular(name), price, date });
         }
         if (!latest.size) throw new Error('empty');
         return latest;
@@ -1250,9 +1256,9 @@ function upgSyncBetInput() {
                 const latest = parsePrices(await r.text());
                 const newest = [...latest.values()].reduce((d, g) => g.date > d ? g.date : d, '');
                 prices = new Map([...latest].filter(([, g]) => g.date === newest));
-                loadedAt = Date.now();
+                loadedAt = Date.now(); pricesLive = true;
             } catch { /* остаются сохранённые цены */ }
-            finally { priceReq = null; paint(); if (dlg.open) renderDialog(); }
+            finally { priceReq = null; paint(); if (dlg.open) renderDialog(); G.onPrices?.(); }
         })();
     }
 
@@ -1268,7 +1274,7 @@ function upgSyncBetInput() {
             for (const entry of names) {
                 const name = typeof entry === 'string' ? entry : entry?.name;
                 const slug = name?.toLowerCase().replace(/[^a-z0-9]/g, '');
-                if (slug) listed.set(slug, { slug, name });
+                if (slug) listed.set(slug, { slug, name: singular(name) });
             }
             if (dlg.open) renderDialog();
         } catch { catalogAsked = false; }
@@ -1433,10 +1439,6 @@ function upgSyncBetInput() {
     };
 
     function choose(slug) {
-        if (liveReady && liveOffers.size && !liveOffers.has(slug)) {
-            showMessage('Этот подарок сейчас недоступен для апгрейда. Выберите другой.');
-            return;
-        }
         targetSlug = slug;
         paint();
         upgRefresh(true, !stakeItem() && cashCents > 0 ? 'bet' : undefined);
@@ -1582,10 +1584,6 @@ function upgSyncBetInput() {
         name.textContent = g.name;
         const price = document.createElement('em');
         price.textContent = money(usd(g));
-        if (view === 'catalog' && liveReady && liveOffers.size && !liveOffers.has(g.slug)) {
-            b.classList.add('is-unquoted');
-            price.textContent = money(usd(g)) + ' · скоро';
-        }
         b.append(frame, name, price);
         b.addEventListener('click', onPick);
         return b;
@@ -1600,7 +1598,6 @@ function upgSyncBetInput() {
         let items = [...all.values()].filter((g) => centsOf(g) != null);
         const st = stakeItem();
         if (st) { const v = centsOf(st); items = items.filter((g) => centsOf(g) > v); }   // только то, что дороже твоего подарка
-        if (catalogMin) items = items.filter((g) => centsOf(g) > catalogMin);                // и дороже текущей цели (если открыли тапом по ней)
         return items.sort((a, b) => centsOf(a) - centsOf(b) || a.name.localeCompare(b.name));
     }
 
@@ -1611,7 +1608,6 @@ function upgSyncBetInput() {
         for (const g of catalogItems()) {
             const c = centsOf(g);
             if (!(c > vCents) || c > 95 * vCents) continue;                    // дороже ставки и шанс не меньше 1%
-            if (liveReady && liveOffers.size && !liveOffers.has(g.slug)) continue;   // только то, на что есть котировка
             if (!best || Math.abs(c - want) < Math.abs(centsOf(best) - want)) best = g;
         }
         return best;
@@ -1683,7 +1679,7 @@ function upgSyncBetInput() {
         let items;
         if (view === 'catalog') {
             $('wxsGiftTitle').textContent = 'Каталог подарков';
-            sub.textContent = catalogMin ? 'Дороже ' + moneyC(catalogMin) : '';
+            sub.textContent = '';
             items = catalogItems();
         } else {
             items = visibleInventory();
@@ -1698,6 +1694,10 @@ function upgSyncBetInput() {
             else if (view === 'stake') setStake(g.id);
             else { itemId = g.id; view = 'item'; renderDialog(); }
         }, { selected: view === 'catalog' && g.slug === targetSlug })));
+        if (view === 'catalog' && catalogMin && Date.now() < anchorUntil && !q) {       // прокрутка к первому подарку дороже цели (вверх — дешёвые)
+            const i = filtered.findIndex((g) => centsOf(g) > catalogMin);
+            if (i > 0 && list.children[i]) requestAnimationFrame(() => list.children[i]?.scrollIntoView({ block: 'start' }));
+        }
         empty.hidden = filtered.length > 0 || (isInventory && !items.length && (!inventoryLoaded || !!liveLoad || !!lastErr));
         empty.innerHTML = q && items.length ? '<span>🔍</span><p>Ничего не найдено</p>' : '<span>🎁</span><p>' +
             (view === 'catalog' ? 'Подарков пока нет' : view === 'stake' && inventory.length ? 'Нет подходящих подарков' : 'Инвентарь пуст') + '</p>';
@@ -1712,7 +1712,8 @@ function upgSyncBetInput() {
 
     function openDialog(v, minCents) {
         view = v;
-        catalogMin = v === 'catalog' && minCents > 0 ? minCents : null;
+        catalogMin = v === 'catalog' && minCents > 0 ? minCents : null;   // якорь: каталог открывается на подарках дороже цели
+        anchorUntil = catalogMin ? Date.now() + 2500 : 0;
         search.value = '';
         renderDialog();
         if (!dlg.open) dlg.showModal();
@@ -1724,7 +1725,8 @@ function upgSyncBetInput() {
     retry.addEventListener('click', refreshLive);
     back.addEventListener('click', () => openDialog('inventory'));
     dlg.addEventListener('click', (e) => { if (e.target === dlg) dlg.close(); });
-    search.addEventListener('input', renderDialog);
+    search.addEventListener('input', () => { anchorUntil = 0; renderDialog(); });
+    ['touchstart', 'wheel', 'pointerdown'].forEach((ev) => list.addEventListener(ev, () => { anchorUntil = 0; }, { passive: true }));
     $('wxsGiftInventory').addEventListener('click', () => openDialog('inventory'));
     // ---------- шторка «ТВОЯ СТАВКА»: Баланс | Подарки ----------
     const sheet = $('stkSheet'), stkPanel = $('stkPanel'), stkAmount = $('stkAmount'), stkHint = $('stkHint');
@@ -1902,6 +1904,14 @@ function paintProfile(p) {
   });
 })();
 
+/* ---- названия подарков: Sakura Flowers → Sakura Flower ---- */
+function singular(n) {
+  let s = String(n || '').trim();
+  s = s.replace(/s-in-the-/i, '-in-the-').replace(/Bunnies$/, 'Bunny');
+  if (/(ches|shes|xes|sses)$/i.test(s)) return s.slice(0, -2);
+  if (/ss$/i.test(s)) return s;
+  return /s$/i.test(s) ? s.slice(0, -1) : s;
+}
 /* ---- кейсы ---- */
 const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const csMoney = (n) => (Math.round((Number(n) || 0) * 100) / 100) + ' $';          // 25 $ · 0.5 $ · 47.9 $
@@ -1913,8 +1923,11 @@ const isFreeCase = (c) => Number(c.cost) === 0 || c.is_free === true || c.free =
 function normItems(c) {                      // состав берём с сервера (поля читаем с запасом по именам)
   const raw = c.items || c.gifts || c.contents || c.drops || [];
   const a = raw.map((it) => ({
-    slug: it.gift_slug || it.slug || '', name: it.name || it.gift_slug || it.slug || '',
-    price: it.price_cents != null ? it.price_cents / 100 : Number(it.price) || 0,
+    slug: it.gift_slug || it.slug || '', name: singular(it.name || it.gift_slug || it.slug || ''),
+    price: (() => {
+      const slug = it.gift_slug || it.slug || '', live = slug && !/^cash/.test(slug) ? window.WXG?.priceCents?.(slug) : null;
+      return live != null ? live / 100 : it.price_cents != null ? it.price_cents / 100 : Number(it.price) || 0;
+    })(),
     chance: it.chance != null ? Number(it.chance) : null, weight: Number(it.weight) || 0
   }));
   const sw = a.reduce((s, x) => s + x.weight, 0);
@@ -1977,9 +1990,15 @@ function renderCases(swap) {
   if (swap) { box.classList.remove('swap'); void box.offsetWidth; box.classList.add('swap'); }
 }
 async function loadCases() {
-  const list = await publicRpc('list_cases');
+  let list = null;
+  for (let i = 0; i < 3 && !(Array.isArray(list) && list.length); i++) {   // до 3 попыток, чтобы кейсы не пропадали при сбое сети
+    list = await publicRpc('list_cases');
+    if (!(Array.isArray(list) && list.length)) await new Promise((r) => setTimeout(r, 500));
+  }
   if (Array.isArray(list) && list.length) casesList = list;
+  if (casesList.length !== 10) console.warn('list_cases вернул кейсов: ' + casesList.length + ' (ожидалось 10) — проверьте таблицу кейсов в Supabase');
   renderCases(true);
+  window.WXG?.refreshPrices?.();                    // подтянуть свежие цены подарков из сети
 }
 $('#csTabs').addEventListener('click', (e) => {
   const b = e.target.closest('button'); if (!b || b.dataset.k === csTab) return;
@@ -2170,7 +2189,7 @@ function showReward(wins) {
   $('#rwList').replaceChildren(...wins.map((w, i) => {
     const row = document.createElement('div'); row.className = 'rwd-row'; row.style.setProperty('--i', i); if (w.id) row.dataset.id = w.id;
     const im = document.createElement('span'); im.className = 'rwd-img'; im.append(giftImg(w, false, true));
-    const nm = document.createElement('b'); nm.className = 'rwd-nm'; nm.textContent = w.name || '';
+    const nm = document.createElement('b'); nm.className = 'rwd-nm'; nm.textContent = singular(w.name || '');
     const v = document.createElement('i'); v.className = 'rwd-pr'; v.textContent = csMoney(w.price);
     row.append(im, nm, v);
     return row;
@@ -2296,6 +2315,7 @@ pill.style.transition = 'none';          // первый показ без «в�
 place(cur);
 show(cur);
 requestAnimationFrame(() => requestAnimationFrame(() => { pill.style.transition = ''; }));                                        // открывает апгрейдер
+if (window.WXG) WXG.onPrices = () => { if (casesList.length) renderCases(false); };
 loadCases();
 bootPlayer().then(() => { if (window.WXG) WXG.refreshAlways(); });
 
