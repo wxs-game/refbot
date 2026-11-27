@@ -791,3 +791,5 @@ input,textarea{user-select:text;-webkit-user-select:text}
 #upgraderPage .wxs-stake-img{width:84px;height:84px}
 #upgraderPage .wxs-stake-slot strong{font-size:13px}
 #upgraderPage .wxs-stake-slot em{font-size:13px}
+
+.stk-ok[hidden]{display:none!important}

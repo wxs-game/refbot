@@ -901,7 +901,7 @@ function upgSliderInput(v) {
     cancelAnimationFrame(upg.chRaf); upg.chRaf = 0;
     upgPaintSlider(raw);
     const c = Math.round(raw);
-    if (c !== upg.chance) { upg.chance = c; upg.pendingRefresh = true; }
+    if (c !== upg.chance) { upg.chance = c; upg.userChance = true; upg.pendingRefresh = true; }
     upg.shown = raw;
     if (!upg.sliderRaf) upg.sliderRaf = requestAnimationFrame(() => {
         upg.sliderRaf = 0;
@@ -952,6 +952,7 @@ function upgSetChance(c) {
     c = parseInt(c, 10);
     if (!isFinite(c)) return;
     upg.chance = Math.max(UPG_MIN_CHANCE, Math.min(UPG_MAX_CHANCE, c));
+    upg.userChance = true;
     upgRefresh(true);
 }
 
@@ -1379,10 +1380,19 @@ function upgSyncBetInput() {
         const st = stakeItem();
         if (st) {
             const v = centsOf(st);
-            if (v && t?.cents) upg.chance = Math.max(UPG_MIN_CHANCE, Math.min(UPG_MAX_CHANCE, Math.round(95 * v / t.cents)));
-            if (v && input) input.value = (v / 100).toFixed(2);
+            if (!v) return;
+            const derivedOf = (c) => Math.max(UPG_MIN_CHANCE, Math.min(UPG_MAX_CHANCE, Math.round(95 * v / c)));
+            if (upg.userChance) {                        // двигали шанс — подбираем подарок, ближайший к нужной цене
+                upg.userChance = false;
+                const nt = pickTargetFor(v, upg.chance);
+                if (nt && nt.slug !== targetSlug) { targetSlug = nt.slug; paint(); }
+            }
+            const t2 = target();
+            if (t2?.cents && !upg.sliding) upg.chance = derivedOf(t2.cents);   // отпустили — шанс «прилипает» к реальному
+            if (input) input.value = (v / 100).toFixed(2);
             return;
         }
+        upg.userChance = false;
         if (!t?.cents) return;
         const clampChance = (v) => Math.max(UPG_MIN_CHANCE, Math.min(UPG_MAX_CHANCE, v));
         if (fromBet) {
@@ -1437,7 +1447,6 @@ function upgSyncBetInput() {
         paint();
         upgRefresh(true);
         if (dlg.open) dlg.close();
-        if (st && !targetSlug) openDialog('catalog');
     }
 
     // ---------- раунд ----------
@@ -1578,6 +1587,19 @@ function upgSyncBetInput() {
         return items.sort((a, b) => centsOf(a) - centsOf(b) || a.name.localeCompare(b.name));
     }
 
+    // Цена цели = 95% · цена ставки / шанс. Берём ближайший доступный подарок дороже ставки.
+    function pickTargetFor(vCents, chance) {
+        const want = 95 * vCents / Math.max(1, chance);
+        let best = null;
+        for (const g of catalogItems()) {
+            const c = centsOf(g);
+            if (!(c > vCents) || c > 95 * vCents) continue;                    // дороже ставки и шанс не меньше 1%
+            if (liveReady && liveOffers.size && !liveOffers.has(g.slug)) continue;   // только то, на что есть котировка
+            if (!best || Math.abs(c - want) < Math.abs(centsOf(best) - want)) best = g;
+        }
+        return best;
+    }
+
     function renderItem() {
         const item = inventory.find((i) => i.id === itemId);
         if (!item) { view = 'inventory'; return renderDialog(); }
@@ -1708,6 +1730,7 @@ function upgSyncBetInput() {
         stkTabs.forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.stkTab === sheetTab)));
         $('stkCash').hidden = sheetTab !== 'cash';
         $('stkGifts').hidden = sheetTab !== 'gift';
+        $('stkOk').hidden = sheetTab === 'gift';             // для подарков ОК не нужен
         if (sheetTab === 'cash') return updateHint();
         const t = sheetTargetCents();
         const items = inventory.filter((g) => !t || centsOf(g) < t);
@@ -1724,7 +1747,7 @@ function upgSyncBetInput() {
             const price = document.createElement('em');
             price.textContent = money(usd(g));
             b.append(frame, name, price);
-            b.addEventListener('click', () => { sheetGift = g.id; window.haptic?.('select'); renderSheet(); });
+            b.addEventListener('click', () => { window.haptic?.('select'); setStake(g.id); closeSheet(); });
             return b;
         }));
         emptyEl.hidden = items.length > 0;
