@@ -681,7 +681,6 @@ input,textarea{user-select:text;-webkit-user-select:text}
 #upgraderPage .wxs-stake-btn svg{ width: 24px; height: 24px; }
 #upgraderPage.gift-stake #upgBetHeader .card-input-wrap,
 #upgraderPage.gift-stake #upgBetBtns{ display: none; }
-#upgraderPage.gift-stake .upg-slider-card,
 #upgraderPage.gift-stake .upg-chance-row,
 #upgraderPage.gift-stake .upg-panel .mines-bet-header:not(#upgBetHeader),
 #upgraderPage.gift-stake .upg-panel .ctrl-btns-row:not(#upgBetBtns){ opacity: .42; pointer-events: none; }
@@ -1023,3 +1022,54 @@ button{font-family:inherit}
 .page.on .upg-card>:nth-child(2){animation-delay:40ms}.page.on .upg-card>:nth-child(3){animation-delay:80ms}.page.on .upg-card>:nth-child(4){animation-delay:120ms}
 .page.on .stats{animation-delay:50ms}.page.on>.btn:nth-of-type(1){animation-delay:100ms}.page.on>.btn:nth-of-type(2){animation-delay:140ms}
 @media (prefers-reduced-motion:reduce){.wxs-gift-card,.page.on .upg-card>*,.page.on .prof,.page.on .stats,.page.on>.btn{animation:none}}
+
+
+/* ===================================================================
+   ПРАВКИ: синий слайдер, без подписи шанса, насыщенный контрастный стиль
+   =================================================================== */
+:root{--bg:#04050a;--tx:#fff;--mu:#b4b8c6;--ac:#2f8cff;--ac2:#1f7aff;--sf:#13151c;--sf2:#171a22;--sf3:#1e222c;
+ --win:#1fe56f;--lose:#ff3347;--gold:#ffd400}
+html,body{background:var(--bg)}
+/* слайдер шанса: синий; подпись «Шанс победы» и значение убраны */
+.upg-slider-heading{display:none!important}
+.upg-glass-rail{background:linear-gradient(90deg,#1f6bff,#2f8cff 55%,#5cc0ff)!important}
+.upg-glass-rail i{background:linear-gradient(90deg,#1f6bff,#2f8cff)!important}
+.upg-liquid-thumb{background:linear-gradient(155deg,#8ccbff,#2f8cff 55%,#1558e6)!important;border-color:rgba(160,210,255,.95)!important;
+ box-shadow:0 3px 10px #000a,0 0 16px rgba(47,140,255,.65),inset 0 1px 1px #fff!important}
+.upg-slider-control.is-drag .upg-liquid-thumb{box-shadow:0 4px 12px #000b,0 0 22px rgba(47,140,255,.9),inset 0 1px 2px #fff!important}
+.upg-slider::-webkit-slider-thumb{background:linear-gradient(145deg,#8ccbff,#2f8cff 58%,#1558e6)!important}
+.upg-slider::-moz-range-thumb{background:#2f8cff!important}
+/* контраст и «сочность» */
+.wheel-card,.card,.cs-card::before{background:linear-gradient(180deg,#242832,#10121a)!important}
+.cs-card::before{background:radial-gradient(95% 75% at 50% 112%,color-mix(in srgb,var(--c1) 85%,transparent),transparent 72%),linear-gradient(180deg,#262a34,#12141a)!important}
+.cs-card::after{box-shadow:0 0 22px 3px var(--c1)!important;opacity:1!important}
+.upg-slider-card,.upg-panel,.wxs-stake-box,.stats{background:var(--sf2)!important}
+.stats small,.wxs-stake-slot small{color:#a3a8b8!important}
+.tab{color:#c4c7d2}.tab.on,.tab.under{color:#fff}
+.mines-main-btn,.btn,.wxs-item-btn.is-gold{background:linear-gradient(180deg,#3b97ff,#1f6bff)!important;box-shadow:0 8px 28px rgba(47,140,255,.55)!important}
+.btn.ghost,.wxs-item-btn{background:rgba(255,255,255,.13)}
+.cs-chip{background:rgba(0,0,0,.65);color:#fff}
+img,canvas,svg image{filter:saturate(1.3) contrast(1.06)}
+
+/* шторки: свайп вниз без глитчей */
+.wxs-sheet,.cv-scroll,.rwd-list,.wxs-gift-grid{overscroll-behavior:contain}
+.wxs-sheet-grip,.cv-top,.wxs-sheet header{touch-action:none}
+.wxs-sheet-grip{position:relative}
+.wxs-sheet-grip::after{content:"";position:absolute;left:-60px;right:-60px;top:-12px;bottom:-14px}
+.wxs-sheet.swiped::backdrop{opacity:0;transition:opacity .22s}
+
+/* ===== слайдер шанса: новый синий вид; в режиме «свой подарок» он активен и подбирает цель ===== */
+#upgraderPage.gift-stake .upg-slider-card{opacity:1!important;pointer-events:auto!important}
+.upg-slider-card{background:linear-gradient(180deg,#171b27,#10131c)!important;border:1px solid rgba(47,140,255,.32)!important;
+ box-shadow:0 10px 30px rgba(31,107,255,.2),inset 0 1px 0 rgba(255,255,255,.06)!important;border-radius:26px!important}
+.upg-glass-rail{top:calc(50% - 7px)!important;height:14px!important;border-radius:99px!important;
+ background:linear-gradient(90deg,#1648d8,#2f8cff 60%,#6fd0ff)!important;
+ box-shadow:0 0 18px rgba(47,140,255,.55),inset 0 1px 2px rgba(255,255,255,.35)!important}
+.upg-glass-rail i{background:#0d1019!important;box-shadow:inset 0 2px 5px #000c!important}   /* перекрывает незаполненную часть */
+.upg-liquid-thumb{width:34px!important;height:34px!important;border-radius:50%!important;
+ background:radial-gradient(circle at 35% 30%,#fff,#d6eaff 45%,#78b8ff)!important;border:4px solid #1f6bff!important;
+ box-shadow:0 0 0 5px rgba(47,140,255,.22),0 6px 16px rgba(0,0,0,.65),0 0 22px rgba(47,140,255,.85)!important;
+ -webkit-backdrop-filter:none!important;backdrop-filter:none!important}
+.upg-liquid-thumb::before{display:none!important}
+.upg-slider-control.is-drag .upg-liquid-thumb{transform:translate(-50%,-50%) scale(1.14)!important;
+ box-shadow:0 0 0 8px rgba(47,140,255,.28),0 8px 20px rgba(0,0,0,.7),0 0 30px rgba(47,140,255,1)!important}

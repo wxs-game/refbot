@@ -1446,6 +1446,7 @@ function upgSyncBetInput() {
     }
 
     function setStake(id) {
+        if (id && page.classList.contains('hidden')) window.goUpgrader?.();   // из инвентаря / после кейса — перескакиваем на апгрейдер
         stakeId = id;
         if (id) cashCents = null;
         const st = stakeItem(), t = target();
@@ -1472,6 +1473,10 @@ function upgSyncBetInput() {
     G.refreshAlways = () => refreshLive();
     G.imageFor = imageFor; G.giftBy = giftBy; G.money = money;
     G.openInventory = () => openDialog('inventory');
+    G.upgradeWith = async (id) => {                      // подарок только что выпал — ждём, пока он появится в инвентаре
+        if (!inventory.some((g) => g.id === id)) await refreshLive();
+        if (inventory.some((g) => g.id === id)) setStake(id); else openDialog('inventory');
+    };
     // цена продажи подарка (в центах) и продажа пачки подарков одним действием
     G.sellEstimate = (slug, fallbackUsd) => { const c = sellCents(giftBy(slug)); return c != null ? c : Math.floor(Math.round((fallbackUsd || 0) * 100) * 87 / 100); };
     G.sellMany = async (ids) => {
@@ -1610,6 +1615,7 @@ function upgSyncBetInput() {
         let best = null;
         for (const g of catalogItems()) {
             const c = centsOf(g);
+            if (!upgradable(g.slug)) continue;                                  // только подарки с котировкой сервера
             if (!(c > vCents) || c > 95 * vCents) continue;                    // дороже ставки и шанс не меньше 1%
             if (!best || Math.abs(c - want) < Math.abs(centsOf(best) - want)) best = g;
         }
@@ -2022,6 +2028,52 @@ function closeSheet(d) {
   d.addEventListener('animationend', (e) => { if (e.target === d) fin(); });
   setTimeout(fin, 340);
 }
+/* ---- свайп вниз закрывает любую шторку: за язычок, шапку и за контент (если он прокручен к началу) ---- */
+function enableSwipeClose(d) {
+  let y0 = 0, dy = 0, t0 = 0, drag = false, sc = null;
+  const scrollerOf = (el) => {
+    for (; el && el !== d.parentElement; el = el.parentElement) {
+      if (el.scrollHeight > el.clientHeight + 1 && /(auto|scroll)/.test(getComputedStyle(el).overflowY)) return el;
+      if (el === d) break;
+    }
+    return null;
+  };
+  d.addEventListener('touchstart', (e) => {
+    if (e.touches.length !== 1 || d.classList.contains('closing') || d.classList.contains('swiped')) { drag = false; return; }
+    y0 = e.touches[0].clientY; dy = 0; t0 = performance.now(); drag = false; sc = scrollerOf(e.target);
+    d.style.transition = '';
+  }, { passive: true });
+  d.addEventListener('touchmove', (e) => {
+    if (e.touches.length !== 1 || d.classList.contains('swiped')) return;
+    const dd = e.touches[0].clientY - y0;
+    if (!drag) {
+      if (dd < 6 || (sc && sc.scrollTop > 0)) return;           // тянем только вниз и только когда список наверху
+      drag = true; d.style.transition = 'none';
+    }
+    dy = Math.max(0, dd - 6);
+    d.style.transform = 'translate3d(0,' + dy + 'px,0)';
+    if (e.cancelable) e.preventDefault();
+  }, { passive: false });
+  const end = () => {
+    if (!drag) return;
+    drag = false;
+    const v = dy / Math.max(1, performance.now() - t0);
+    if (dy > 110 || (v > 0.5 && dy > 30)) {
+      d.classList.add('swiped');
+      d.style.transition = 'transform .22s cubic-bezier(.4,0,1,1)';
+      d.style.transform = 'translate3d(0,110%,0)';
+      setTimeout(() => { if (d.open) d.close(); d.style.transition = ''; d.style.transform = ''; d.classList.remove('swiped'); }, 230);
+      buzz('light');
+    } else {
+      d.style.transition = 'transform .22s cubic-bezier(.2,.9,.25,1)';
+      d.style.transform = '';
+      setTimeout(() => { d.style.transition = ''; }, 240);
+    }
+  };
+  d.addEventListener('touchend', end);
+  d.addEventListener('touchcancel', end);
+}
+$$('dialog.wxs-sheet').forEach(enableSwipeClose);
 const outside = (d, e) => { const r = d.getBoundingClientRect(); return e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom; };
 
 /* ---- конфетти ---- */
@@ -2067,10 +2119,10 @@ function pickWeighted(items) {
   for (let i = 0; i < items.length; i++) { r -= w[i]; if (r <= 0) return items[i]; }
   return items[items.length - 1];
 }
-function tile(it) {
+function tile(it, play) {
   const b = document.createElement('div'); b.className = 'cv-it';
   const p = document.createElement('span'); p.className = 'cv-p'; p.textContent = it.price ? csMoney(it.price) : '';
-  const im = document.createElement('span'); im.className = 'cv-im'; im.append(giftImg(it, false));
+  const im = document.createElement('span'); im.className = 'cv-im'; im.append(giftImg(it, false, play));
   b.append(p, im); return b;
 }
 const centerX = (idx, jit) => cv.rowW / 2 - (idx * (cv.iw + GAP) + cv.iw / 2) + (jit || 0);
@@ -2118,7 +2170,7 @@ function openCase(c) {
   if (!cv.pool.length) cv.pool = [{ slug: '', name: '', price: 0, chance: null, weight: 1 }];
   $('#cvTitle').textContent = c.name;
   const items = normItems(c);
-  $('#cvGrid').replaceChildren(...items.map(tile));
+  $('#cvGrid').replaceChildren(...items.map((it) => tile(it, true)));
   $('#cvEmpty').hidden = items.length > 0;
   $('#cvScroll').scrollTop = 0;
   cvReels.style.transition = 'none';
@@ -2195,19 +2247,22 @@ function showReward(wins) {
   $('#rwList').replaceChildren(...wins.map((w, i) => {
     const row = document.createElement('div'); row.className = 'rwd-row'; row.style.setProperty('--i', i); if (w.id) row.dataset.id = w.id;
     const im = document.createElement('span'); im.className = 'rwd-img'; im.append(giftImg(w, false, true));
-    const nm = document.createElement('b'); nm.className = 'rwd-nm'; nm.textContent = singular(w.name || '');
-    const v = document.createElement('i'); v.className = 'rwd-pr'; v.textContent = csMoney(w.price);
+    const nm = document.createElement('b'); nm.className = 'rwd-nm';
+    const v = document.createElement('i'); v.className = 'rwd-pr';
+    if (isCash(w)) nm.textContent = (Math.round((Number(w.price) || 0) * 100) / 100) + '$';     // деньги: «0.1$», справа ничего
+    else { nm.textContent = singular(w.name || ''); v.textContent = csMoney(w.price); }
     row.append(im, nm, v);
     return row;
   }));
   rwWins = wins.filter((w) => !isCash(w) && w.id && window.WXG);              // деньги уже на балансе — продаются только подарки
   rwSellTotal = rwWins.reduce((s, w) => s + WXG.sellEstimate(w.slug, w.price), 0);
-  rwSell.hidden = !rwWins.length; rwSell.disabled = false; rwInvBtn.hidden = false;
+  rwSell.hidden = !rwWins.length; rwSell.disabled = false; rwInvBtn.hidden = !rwWins.length;   // выпали только $ → кнопки «В инвентарь» нет
+  rwUp.hidden = !(rwWins.length === 1 && window.WXG?.upgradeWith);
   rwSell.textContent = 'Продать ' + (rwWins.length > 1 ? 'всё ' : '') + 'за ' + csMoney(rwSellTotal / 100);
   if (!rwDlg.open) rwDlg.showModal();
   buzz('heavy'); confetti();
 }
-const rwSell = $('#rwSell'), rwInvBtn = $('#rwInv'); let rwWins = [], rwSellTotal = 0;
+const rwSell = $('#rwSell'), rwInvBtn = $('#rwInv'), rwUp = $('#rwUp'); let rwWins = [], rwSellTotal = 0;
 rwSell.onclick = async () => {
   if (rwSell.disabled || !rwWins.length) return;
   if (!lockEconomy()) return toast('Подождите, идёт другая операция');
@@ -2219,12 +2274,16 @@ rwSell.onclick = async () => {
       buzz('success');
       $$('#rwList .rwd-row').forEach((row, i) => { if (r.sold.includes(row.dataset.id)) row.style.opacity = '.4'; });
     }
-    if (r.sold.length === rwWins.length) { rwSell.hidden = true; rwInvBtn.hidden = true; }
+    if (r.sold.length === rwWins.length) { rwSell.hidden = true; rwInvBtn.hidden = true; rwUp.hidden = true; }
     else { rwWins = rwWins.filter((w) => !r.sold.includes(w.id)); rwSell.disabled = false; showMessage('Не всё удалось продать — остальное лежит в инвентаре.'); }
   } finally { unlockEconomy(); }
 };
 rwDlg.addEventListener('close', () => { if (cvDlg.open) { idleAll(); } });
 $('#rwClose').onclick = () => closeSheet(rwDlg);
+rwUp.onclick = () => {                              // после кейса: сразу на апгрейдер с этим подарком в ставке
+  const id = rwWins.length === 1 ? rwWins[0].id : null; if (!id) return;
+  closeSheet(rwDlg); closeSheet(cvDlg); setTimeout(() => WXG.upgradeWith(id), 260);
+};
 $('#rwInv').onclick = () => { closeSheet(rwDlg); closeSheet(cvDlg); setTimeout(() => WXG.openInventory(), 260); };
 rwDlg.addEventListener('click', (e) => { if (e.target === rwDlg && outside(rwDlg, e)) closeSheet(rwDlg); });
 rwDlg.addEventListener('cancel', (e) => { e.preventDefault(); closeSheet(rwDlg); });
@@ -2259,6 +2318,7 @@ function show(i) {
   if (t === 'cases' && !casesList.length) loadCases();
   if (t === 'prof') { $('#giftCount').textContent = window.WXG ? WXG.count() : '—'; if (window.WXG) WXG.refreshAlways(); queueSync(0); }
 }
+window.goUpgrader = () => { const i = tabs.findIndex((t) => t.dataset.t === 'up'); if (i < 0) return; cur = i; hoverIdx = i; place(cur); show(cur); };
 function nearest(x) {
   let b = 0, d = Infinity;
   tabs.forEach((t, i) => { const r = t.getBoundingClientRect(), dd = Math.abs(x - (r.left + r.width / 2)); if (dd < d) { d = dd; b = i; } });
