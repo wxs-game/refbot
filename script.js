@@ -2354,7 +2354,7 @@ $('#openInv').onclick = () => WXG.openInventory();
 const PAY_URL = SUPABASE_URL + '/functions/v1/payments';
 const APP_URL = 'https://wxs-game.github.io/refbot';
 // Новый URL намеренно сбрасывает кэш старого манифеста («Refbot») в TonConnect.
-const TONCONNECT_MANIFEST_URL = APP_URL + '/tonconnect-manifest.json?v=rocketup-20261127-3';
+const TONCONNECT_MANIFEST_URL = APP_URL + '/tonconnect-manifest.json?v=rocketup-20261127-4';
 async function payApi(action, args) {
   if (!(tg && tg.initData)) return { ok: false, error: NO_TG };
   try {
@@ -2403,11 +2403,9 @@ let tcui = null;
 function tonUI() {
   if (tcui) return tcui;
   if (!window.TON_CONNECT_UI) return null;
-  // Создаём портал сами: он не может оказаться под шторкой пополнения.
-  if (!document.getElementById('tc-widget-root')) {
-    const root = document.createElement('div'); root.id = 'tc-widget-root'; document.body.append(root);
-  }
-  tcui = new TON_CONNECT_UI.TonConnectUI({ manifestUrl: TONCONNECT_MANIFEST_URL, widgetRootId: 'tc-widget-root' });
+  // Оставляем управление слоем самому TonConnect: так его скрытый контейнер
+  // не перехватывает касания после отмены или возврата из кошелька.
+  tcui = new TON_CONNECT_UI.TonConnectUI({ manifestUrl: TONCONNECT_MANIFEST_URL });
   tcui.onStatusChange((wallet) => {
     if (wallet) {
       try { localStorage.setItem('rocketup_ton_connected', '1'); } catch (_) {}
