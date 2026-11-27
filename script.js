@@ -1573,10 +1573,12 @@ function upgSyncBetInput() {
     // ---------- каталог, инвентарь, карточка подарка ----------
     const dlg = $('wxsGiftDialog'), list = $('wxsGiftList'), search = $('wxsGiftSearch'), empty = $('wxsGiftEmpty'), itemBox = $('wxsGiftItem'), back = $('wxsGiftBack'), retry = $('wxsGiftRetry');
 
+    // апгрейд возможен только на подарки с котировкой сервера; остальные видны, но неактивны
+    const upgradable = (slug) => !(serverCatalog.size || liveOffers.size) || serverCatalog.has(slug) || liveOffers.has(slug);
     function card(g, onPick, opts = {}) {
         const b = document.createElement('button');
         b.type = 'button';
-        b.className = 'wxs-gift-card' + (opts.selected ? ' is-selected' : '');
+        b.className = 'wxs-gift-card' + (opts.selected ? ' is-selected' : '') + (opts.dim ? ' is-dim' : '');
         const frame = document.createElement('span');
         frame.className = 'wxs-gift-img';
         frame.append(imageFor(g, true));
@@ -1595,10 +1597,11 @@ function upgSyncBetInput() {
         for (const g of prices.values()) all.set(g.slug, { ...all.get(g.slug), ...g });
         for (const slug of serverCatalog.keys()) if (!all.has(slug)) all.set(slug, giftBy(slug));
         for (const slug of liveOffers.keys()) if (!all.has(slug)) all.set(slug, giftBy(slug));
-        let items = [...all.values()].filter((g) => centsOf(g) != null);
+        let items = [...all.values()];                       // абсолютно все известные подарки, даже без цены
         const st = stakeItem();
         if (st) { const v = centsOf(st); items = items.filter((g) => centsOf(g) > v); }   // только то, что дороже твоего подарка
-        return items.sort((a, b) => centsOf(a) - centsOf(b) || a.name.localeCompare(b.name));
+        const key = (g) => centsOf(g) ?? 1e12;                  // без цены — в конец
+        return items.sort((a, b) => key(a) - key(b) || a.name.localeCompare(b.name));
     }
 
     // Цена цели = 95% · цена ставки / шанс. Берём ближайший доступный подарок дороже ставки.
@@ -1690,10 +1693,13 @@ function upgSyncBetInput() {
         }
         const filtered = items.filter((g) => g.name.toLocaleLowerCase().includes(q));
         list.replaceChildren(...filtered.map((g) => card(g, () => {
-            if (view === 'catalog') choose(g.slug);
+            if (view === 'catalog') {
+                if (!upgradable(g.slug)) return showMessage('Подарок «' + g.name + '» сейчас недоступен для апгрейда. Выберите другой.');
+                choose(g.slug);
+            }
             else if (view === 'stake') setStake(g.id);
             else { itemId = g.id; view = 'item'; renderDialog(); }
-        }, { selected: view === 'catalog' && g.slug === targetSlug })));
+        }, { selected: view === 'catalog' && g.slug === targetSlug, dim: view === 'catalog' && !upgradable(g.slug) })));
         if (view === 'catalog' && catalogMin && Date.now() < anchorUntil && !q) {       // прокрутка к первому подарку дороже цели (вверх — дешёвые)
             const i = filtered.findIndex((g) => centsOf(g) > catalogMin);
             if (i > 0 && list.children[i]) requestAnimationFrame(() => list.children[i]?.scrollIntoView({ block: 'start' }));
@@ -2210,7 +2216,7 @@ rwSell.onclick = async () => {
   try {
     const r = await WXG.sellMany(rwWins.map((w) => w.id));
     if (r.sold.length) {
-      toast('+' + fmt(r.balance - before), 'win'); buzz('success');
+      buzz('success');
       $$('#rwList .rwd-row').forEach((row, i) => { if (r.sold.includes(row.dataset.id)) row.style.opacity = '.4'; });
     }
     if (r.sold.length === rwWins.length) { rwSell.hidden = true; rwInvBtn.hidden = true; }
