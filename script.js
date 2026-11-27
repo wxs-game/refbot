@@ -215,6 +215,7 @@ const UPG_HOUSE_EDGE = 0.05;
 const UPG_MIN_CHANCE = 1;
 const UPG_MAX_CHANCE = 90;
 const UPG_STEP = 5;
+const UPG_MIN_BET = 1;       // минимальная ставка в апгрейдере, $
 const UPG_START = 348;       // где стрелка стоит до запуска
 // Профиль вращения снят покадрово (60 fps) с видео-образца:
 //   замах назад ≈9° за 0.15 с -> разгон 0.5 с до ≈1150°/с -> ровное вращение -> торможение v ~ (1-s)^p.
@@ -242,10 +243,10 @@ function upgCalc(bet, chance) {
 }
 
 function upgMinBet(chance) {
-    for (let c = 10; c < 100000; c++) {
+    for (let c = UPG_MIN_BET * 100; c < 100000; c++) {
         if (upgCalc(c / 100, chance).payout > c / 100) return c / 100;
     }
-    return MIN_BET;
+    return UPG_MIN_BET;
 }
 
 // Исход броска считает сервер (SQL-функция upgrader_play) — в браузере его нет.
@@ -484,7 +485,7 @@ function upgDraw() {
     const S = upg.size / 720, chance = upg.chance;
 
     // во время вращения ставку из DOM не читаем (она заблокирована)
-    if (!upg.busy || upg.betC == null) upg.betC = upgBet() || MIN_BET;
+    if (!upg.busy || upg.betC == null) upg.betC = upgBet() || UPG_MIN_BET;
     const bet = upg.betC;
 
     // 1) колесо + сектор (перерисовка только пока сектор реально меняется)
@@ -525,6 +526,7 @@ function upgDraw() {
         upg.centerValue.textContent = outcome === 'win' ? 'ПОБЕДА' : outcome === 'lose' ? 'МИМО' : `${disp}%`;
         upg.centerCoef.textContent = outcome === 'win' ? `+${payout.toFixed(2)} $` : `x${upgCalc(bet, chance).coef.toFixed(2)}`;
         upg.centerCaption.textContent = outcome === 'win' ? 'ЗАЧИСЛЕНО НА БАЛАНС' : outcome === 'lose' ? 'ПОПРОБУЙ ЕЩЁ' : 'ШАНС ПОБЕДЫ';
+        if (upg.chanceNum) upg.chanceNum.textContent = disp;
         upg.center.classList.toggle('is-result', !!outcome);
         upg.center.classList.toggle('is-win', outcome === 'win');
         if (window.WXG?.on) WXG.center(outcome);
@@ -779,13 +781,14 @@ function upgInit() {
     upg.loseCv = mk('lose'); upg.loseCtx = upg.loseCv.getContext('2d');
     upg.stack = stack;
     const center = document.createElement('div');
-    center.className = 'upg-center';
-    center.innerHTML = `<div class="upg-nft"><img src="nft.png" alt="" draggable="false" onerror="this.style.visibility='hidden'"></div><strong class="upg-center-value"></strong><span class="upg-center-coef"></span><small class="upg-center-caption"></small>`;
+    center.className = 'upg-center gift-empty';   // пока цель не выбрана — в центре превью nft.png
+    center.innerHTML = `<div class="upg-nft"><img src="nft.png" alt="" draggable="false" onerror="this.style.visibility='hidden'"></div><strong class="upg-center-value"></strong><span class="upg-center-coef"></span><small class="upg-center-caption"></small><div class="upg-chance" aria-hidden="true"><b class="upg-chance-v"><span class="upg-chance-n"></span><span class="upg-chance-p">%</span></b></div>`;
     stack.appendChild(center);
     upg.center = center;
     upg.centerValue = center.querySelector('.upg-center-value');
     upg.centerCoef = center.querySelector('.upg-center-coef');
     upg.centerCaption = center.querySelector('.upg-center-caption');
+    upg.chanceNum = center.querySelector('.upg-chance-n');
     const rotor = document.createElement('div');
     rotor.className = 'upg-rotor';
     rotor.setAttribute('aria-hidden','true');
@@ -873,7 +876,7 @@ function upgRefresh(resetResult = true, src) {
     if (chanceInput && document.activeElement !== chanceInput) chanceInput.value = upg.chance;
 
     upgSyncSlider();
-    const bet = upgBet() || MIN_BET;
+    const bet = upgBet() || UPG_MIN_BET;
     const { payout, coef } = upgCalc(bet, upg.chance);
     const info = document.getElementById('upgInfo');
     if (info) {
@@ -923,10 +926,24 @@ function upgSyncSlider() {
 
 // Слайдер: во время движения пальца ничего не округляем и не пересобираем —
 // ползунок и сектор идут за значением ровно, тяжёлая часть — раз в кадр.
+// Нижняя граница шанса: при ставке-балансе ставка не может быть меньше 1 $ (считает режим подарков)
+function upgFloor() {
+    const f = Number(window.WXG?.minChance?.());
+    return Math.min(UPG_MAX_CHANCE, Math.max(UPG_MIN_CHANCE, isFinite(f) ? f : UPG_MIN_CHANCE));
+}
+let upgFloorToastAt = 0;
+function upgFloorHit() {
+    if (Date.now() - upgFloorToastAt < 2500) return;
+    upgFloorToastAt = Date.now();
+    if (typeof toast === 'function') toast('Минимальная ставка — 1 $', '', 2000);
+}
+
 function upgSliderInput(v) {
     if (upg.busy) return;
-    const raw = Math.max(UPG_MIN_CHANCE, Math.min(UPG_MAX_CHANCE, parseFloat(v)));
+    const lo = upgFloor();
+    let raw = Math.max(UPG_MIN_CHANCE, Math.min(UPG_MAX_CHANCE, parseFloat(v)));
     if (!isFinite(raw)) return;
+    if (raw < lo) { raw = lo; upgFloorHit(); }
     upg.sliding = true;
     cancelAnimationFrame(upg.chRaf); upg.chRaf = 0;
     upgPaintSlider(raw);
@@ -981,7 +998,9 @@ function upgSetChance(c) {
     if (upg.busy) return;
     c = parseInt(c, 10);
     if (!isFinite(c)) return;
-    upg.chance = Math.max(UPG_MIN_CHANCE, Math.min(UPG_MAX_CHANCE, c));
+    const lo = upgFloor();
+    if (c < lo) upgFloorHit();
+    upg.chance = Math.max(lo, Math.min(UPG_MAX_CHANCE, c));
     upg.userChance = true;
     upgRefresh(true);
 }
@@ -1037,7 +1056,7 @@ async function playUpgrader() {
     if (window.WXG?.on) return WXG.play();
     if (upg.busy || isBetProcessing || isEconomyLocked) return;
     const bet = upgBet(), chance = upg.chance;
-    if (bet < MIN_BET) return showMessage('Минимальная ставка — 0.10 $!');
+    if (bet < UPG_MIN_BET) return showMessage('Минимальная ставка — 1 $!');
     if (bet > currentBalance) return showMessage('Недостаточно средств на балансе!');
     const { payout, coef } = upgCalc(bet, chance);
     if (payout <= bet) return showMessage(`При шансе ${chance}% минимальная ставка — ${upgMinBet(chance).toFixed(2)} $. Увеличьте ставку или уменьшите шанс.`);
@@ -1174,6 +1193,7 @@ function upgSyncBetInput() {
     const usd = (g) => { const c = centsOf(g); return c == null ? null : c / 100; };
     const money = (v) => v == null ? '—' : (Math.round(v * 100) / 100).toFixed(2) + ' $';
     const moneyC = (c) => c == null ? '—' : money(c / 100);
+    const UPG_MIN_STAKE = UPG_MIN_BET * 100;           // минимальная ставка в центах
     const stakeFor = (cents, chance) => Math.max(1, Math.ceil(cents * chance / 95));
     const sellCents = (g) => { const c = centsOf(g); return c == null ? null : Math.floor(c * 87 / 100); };
     const stakeItem = () => inventory.find((i) => i.id === stakeId) || null;
@@ -1341,7 +1361,6 @@ function upgSyncBetInput() {
     }
 
     // ---------- центр колеса ----------
-    const PICK_SVG = '<svg class="wxs-gift-svg" viewBox="0 0 96 96" aria-hidden="true"><rect x="4" y="4" width="88" height="88" rx="18" fill="none" stroke="currentColor" stroke-width="3" stroke-dasharray="9 8" stroke-linecap="round"/><path d="M48 36C33 39 25 32 29 25c4-8 14-6 19 11Zm0 0c15 3 23-4 19-11-4-8-14-6-19 11Z" fill="none" stroke="currentColor" stroke-width="5.7" stroke-linejoin="round"/><path d="M22 36h52a5 5 0 0 1 5 5v7a5 5 0 0 1-5 5H22a5 5 0 0 1-5-5v-7a5 5 0 0 1 5-5Zm0 22h52v15a8 8 0 0 1-8 8H30a8 8 0 0 1-8-8Z" fill="currentColor"/><path d="M48 40v44" stroke="var(--wxs-hole,#1b1b20)" stroke-width="7" stroke-linecap="round"/></svg>';
     let artSlug = null;
 
     function ensureCenter() {
@@ -1352,7 +1371,7 @@ function upgSyncBetInput() {
             pick.type = 'button';
             pick.className = 'wxs-gift-pick';
             pick.setAttribute('aria-label', 'Выбрать подарок');
-            pick.innerHTML = PICK_SVG + '<span class="wxs-gift-art"></span>';
+            pick.innerHTML = '<span class="wxs-gift-art"></span>';
             pick.addEventListener('click', () => { if (G.on && !upg.busy) openDialog('catalog'); });
             upg.center.appendChild(pick);
         }
@@ -1461,11 +1480,18 @@ function upgSyncBetInput() {
         } else if (cashCents != null) {                  // двигаем шанс слайдером — ставка пересчитывается
             const derived = clampChance(Math.round(95 * cashCents / t.cents));
             if (derived !== upg.chance) {                // шанс не менялся — выбранную сумму не трогаем
-                cashCents = stakeFor(t.cents, upg.chance);
+                cashCents = Math.max(UPG_MIN_STAKE, stakeFor(t.cents, upg.chance));
                 input.value = (cashCents / 100).toFixed(2);
                 paintStake();
             }
         }
+    };
+
+    // самый низкий шанс, при котором ставка деньгами ещё не меньше минимальной (1 $)
+    G.minChance = () => {
+        const t = target();
+        if (stakeItem() || !t?.cents || !(cashCents > 0)) return UPG_MIN_CHANCE;
+        return Math.min(UPG_MAX_CHANCE, Math.max(UPG_MIN_CHANCE, Math.floor((UPG_MIN_STAKE - 1) * 95 / t.cents) + 1));
     };
 
     G.center = (outcome) => {
@@ -1562,6 +1588,7 @@ function upgSyncBetInput() {
         } else if (st) {
             const v = centsOf(st);
             if (!v || v >= t.offer.price_cents) return showMessage('Выбери подарок, который дороже твоего.');
+            if (v < UPG_MIN_STAKE) return showMessage('Минимальная ставка — 1 $.');
             if (Math.floor(9500 * v / t.offer.price_cents) < 100) return showMessage('Твой подарок слишком дешёвый для этого апгрейда.');
             fn = 'gift_upgrade_play_gift';
             body = { p_request: crypto.randomUUID(), p_quote: t.offer.id, p_stake_round: st.id };
@@ -1569,6 +1596,7 @@ function upgSyncBetInput() {
             let stake = cashCents || 0;
             stake = Math.min(stake, stakeFor(t.offer.price_cents, UPG_MAX_CHANCE));
             if (!(stake > 0)) return showMessage('Введите ставку.');
+            if (stake < UPG_MIN_STAKE) return showMessage('Минимальная ставка — 1 $.');
             if (Math.floor(9500 * stake / t.offer.price_cents) < 100) return showMessage('Ставка слишком мала для этого подарка.');
             if (stake / 100 > currentBalance + 1e-9) return showMessage('Недостаточно средств на балансе!');
             body = { p_request: crypto.randomUUID(), p_quote: t.offer.id, p_stake_cents: stake };
@@ -1842,7 +1870,7 @@ function upgSyncBetInput() {
     function updateHint() {
         const t = sheetTargetCents();
         const v = parseFloat(stkAmount.value);
-        let text = 'Доступно: ' + money(currentBalance);
+        let text = 'Доступно: ' + money(currentBalance) + ' · мин. ставка 1 $';
         if (t && isFinite(v) && v > 0) {
             const bp = Math.min(9000, Math.floor(9500 * Math.round(v * 100) / t));
             text += bp < 100 ? ' · ставка слишком мала' : ' · шанс ≈ ' + (bp / 100).toFixed(bp % 100 ? 2 : 0) + '%';
@@ -1943,7 +1971,7 @@ function upgSyncBetInput() {
             return closeSheet();
         }
         let cents = Math.round((parseFloat(stkAmount.value) || 0) * 100);
-        if (!(cents >= 10)) return showMessage('Минимальная ставка — 0.10 $.');
+        if (!(cents >= UPG_MIN_STAKE)) return showMessage('Минимальная ставка — 1 $.');
         if (cents / 100 > currentBalance + 1e-9) return showMessage('Недостаточно средств на балансе!');
         const t = target();
         if (t?.cents) {
@@ -1952,6 +1980,7 @@ function upgSyncBetInput() {
                 cents = maxStake;
                 toast('Ставка уменьшена до ' + money(cents / 100) + ' — максимальный шанс 90%', '', 3200);
             }
+            if (cents < UPG_MIN_STAKE) return showMessage('Для этого подарка ставка от 1 $ даёт шанс выше 90%. Выберите подарок подороже.');
             if (Math.floor(9500 * cents / t.cents) < 100) return showMessage('Ставка слишком мала для этого подарка.');
         }
         stakeId = null;

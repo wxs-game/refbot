@@ -1209,3 +1209,48 @@ img,canvas,svg image{filter:saturate(1.3) contrast(1.06)}
 .upg-stack.is-spinning .upg-nft{ box-shadow:0 0 24px rgba(47,140,255,.7), inset 0 0 14px rgba(47,140,255,.25); }
 .upg-rotor svg{ filter:drop-shadow(0 0 5px rgba(255,200,0,.55)); }
 .upg-stack.is-spinning .upg-rotor svg{ filter:drop-shadow(0 0 11px rgba(255,205,0,.95)); }
+
+/* ---- апгрейдер: превью nft.png вместо серого подарка, цель съезжает вниз, шанс — над ней ---- */
+.upg-center > .upg-nft{
+  transition: top .42s cubic-bezier(.22,.9,.3,1), width .42s cubic-bezier(.22,.9,.3,1), height .42s cubic-bezier(.22,.9,.3,1);
+}
+.upg-nft img{ transition: opacity .25s ease; }
+
+/* без цели: рамка с nft.png по центру, нажатие открывает каталог */
+#upgraderPage.gift-mode .upg-center.gift-empty > .wxs-gift-pick{ top: 50cqw; width: 35cqw; height: 35cqw; }
+
+/* цель выбрана: nft.png заменяется на цель, рамка уменьшается и уезжает ниже */
+#upgraderPage.gift-mode .upg-center:not(.gift-empty) > .upg-nft{ top: 59.5cqw; width: 24cqw; height: 24cqw; }
+#upgraderPage.gift-mode .upg-center:not(.gift-empty) > .upg-nft img{ opacity: 0; }
+#upgraderPage.gift-mode .upg-center:not(.gift-empty) > .wxs-gift-pick{ top: 59.5cqw; width: 18cqw; height: 18cqw; }
+
+/* шанс апгрейда — над целью */
+.upg-center > .upg-chance{
+  display: none; top: 30.5cqw; pointer-events: none;
+  justify-content: center; align-items: flex-start; line-height: 1;
+  transition: opacity .3s ease, transform .4s cubic-bezier(.22,.9,.3,1);
+}
+#upgraderPage.gift-mode .upg-center > .upg-chance{ display: flex; }
+#upgraderPage.gift-mode .upg-center.gift-empty > .upg-chance{ opacity: 0; transform: translateY(3cqw); }
+.upg-chance-v{
+  display: inline-flex; align-items: flex-start;
+  font: 800 12.5cqw/1 "Montserrat","Arial Black",Arial,sans-serif;
+  letter-spacing: -.045em; font-variant-numeric: tabular-nums lining-nums;
+  background: linear-gradient(180deg,#fff 12%,#c4e5ff 52%,#5fabff 100%);
+  -webkit-background-clip: text; background-clip: text;
+  color: transparent; -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 0 1.3cqw rgba(47,140,255,.55)) drop-shadow(0 .5cqw .7cqw rgba(0,0,0,.55));
+  transition: filter .4s ease;
+}
+.upg-chance-p{ font-size: .46em; margin: .2em 0 0 .08em; letter-spacing: 0; font-weight: 700; opacity: .92; }
+.upg-stack.is-win .upg-chance-v{
+  background-image: linear-gradient(180deg,#fff 12%,#c8ffd9 52%,#4fe38a 100%);
+  filter: drop-shadow(0 0 1.5cqw rgba(80,230,140,.6)) drop-shadow(0 .5cqw .7cqw rgba(0,0,0,.55));
+}
+.upg-stack.is-lose .upg-chance-v{
+  background-image: linear-gradient(180deg,#ffe3e6 12%,#ff9aa4 55%,#e5424f 100%);
+  filter: drop-shadow(0 0 1.2cqw rgba(225,60,75,.5)) drop-shadow(0 .5cqw .7cqw rgba(0,0,0,.55));
+}
+@media (prefers-reduced-motion: reduce){
+  .upg-center > .upg-nft, .upg-nft img, .upg-center > .upg-chance, .upg-chance-v{ transition: none; }
+}
