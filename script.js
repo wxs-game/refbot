@@ -1955,15 +1955,23 @@ function nearest(x) {
   tabs.forEach((t, i) => { const r = t.getBoundingClientRect(), dd = Math.abs(x - (r.left + r.width / 2)); if (dd < d) { d = dd; b = i; } });
   return b;
 }
-function followPill(x) {                          // пилюля едет за пальцем, но не выходит за края панели
-  const n = nav.getBoundingClientRect(), g = geo(0), w = Math.max(0, g.w - 8) * 1.06;
+function followPill(x) {                          // пилюля того же размера, что вкладка, едет за пальцем и не выходит за края
+  const n = nav.getBoundingClientRect(), g = geo(0), w = Math.max(0, g.w - 8);
   const c = Math.max(w / 2 + 4, Math.min(n.width - w / 2 - 4, x - n.left));
   pill.style.width = w + 'px'; pill.style.left = (c - w / 2) + 'px';
+  const abs = n.left + c;                         // центр пилюли в координатах экрана
+  tabs.forEach((t) => {                           // вкладки под пилюлей подсвечиваем, чтобы подписи читались
+    const r = t.getBoundingClientRect();
+    t.classList.toggle('under', Math.abs(r.left + r.width / 2 - abs) < r.width * 0.75);
+  });
+  return abs;
 }
 function navFinish(e, cancelled) {                // единая точка завершения: вызывается один раз
   if (!navDown) return;
   const d = navDown; navDown = null;
-  nav.classList.remove('hold'); pill.classList.remove('drag');
+  nav.classList.remove('hold'); pill.classList.remove('drag', 'catchup');
+  tabs.forEach((t) => t.classList.remove('under'));
+  clearTimeout(navFinish.t);
   try { nav.releasePointerCapture(d.id); } catch (err) {}
   const i = cancelled || !e ? cur : nearest(e.clientX);
   if (i !== cur) { cur = i; place(cur); show(cur); buzz('light'); }
@@ -1978,10 +1986,14 @@ nav.addEventListener('pointerdown', (e) => {
 });
 nav.addEventListener('pointermove', (e) => {
   if (!navDown || e.pointerId !== navDown.id) return;
-  if (!navDown.moved && Math.abs(e.clientX - navDown.x0) > 8) { navDown.moved = true; pill.classList.add('drag'); }
+  if (!navDown.moved && Math.abs(e.clientX - navDown.x0) > 8) {
+    navDown.moved = true;
+    pill.classList.add('drag', 'catchup');         // первые 140 мс пилюля плавно «догоняет» палец, без прыжка
+    clearTimeout(navFinish.t);
+    navFinish.t = setTimeout(() => pill.classList.remove('catchup'), 140);
+  }
   if (navDown.moved) {
-    followPill(e.clientX);
-    const i = nearest(e.clientX);
+    const i = nearest(followPill(e.clientX));
     if (i !== hoverIdx) { hoverIdx = i; markTabs(i); buzz('select'); }
   }
 });
