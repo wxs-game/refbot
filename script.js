@@ -1713,11 +1713,7 @@ function upgSyncBetInput() {
         const info = document.createElement('p'); info.className = 'wxs-ref-info';
         if (waiting) info.textContent = 'Заявка принята. Подарок ожидает отправки и больше недоступен для продажи или ставок.';
         else if (referralGift) {
-            const q = Number(referral?.qualified_referrals || 0), need = Number(referral?.required_referrals || 4);
-            info.textContent = 'Реферальный дроп нельзя продать или апгрейднуть. Для вывода: ' + q + '/' + need + ' подтверждённых рефералов.';
-            const invite = document.createElement('button'); invite.type = 'button'; invite.className = 'wxs-invite'; invite.textContent = 'Пригласить друзей';
-            invite.onclick = () => { const link = referral?.referral_link; if (!link) return; const share = 'https://t.me/share/url?url=' + encodeURIComponent(link) + '&text=' + encodeURIComponent('Заходи в RocketUP по моей ссылке'); if (tg?.openTelegramLink) tg.openTelegramLink(share); else navigator.clipboard?.writeText(link).then(() => toast('Ссылка скопирована')); };
-            itemBox.replaceChildren(img, name, price, up, sl, withdraw, info, invite); return;
+            itemBox.replaceChildren(img, name, price, up, sl, withdraw); return;
         } else info.textContent = 'Вывод доступен только для дропа из реферального кейса.';
         itemBox.replaceChildren(img, name, price, up, sl, withdraw, info);
     }
@@ -1813,6 +1809,12 @@ function upgSyncBetInput() {
         refreshLive();
         if (v === 'catalog') { refreshPrices(); refreshCatalog(); fetchRate(); }
     }
+
+    // живой прогресс рефералов: пока открыт подарок/условия вывода — подтягиваем состояние каждые 4 с
+    setInterval(async () => {
+        if (!dlg.open || (view !== 'withdraw' && view !== 'item') || busy) return;
+        try { await refreshLive(); if (dlg.open && (view === 'withdraw' || view === 'item')) renderDialog(); } catch (_) {}
+    }, 4000);
 
     $('wxsGiftClose').addEventListener('click', () => dlg.close());
     retry.addEventListener('click', refreshLive);
