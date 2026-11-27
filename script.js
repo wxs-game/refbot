@@ -1122,7 +1122,7 @@ function upgSyncBetInput() {
     let inventory = [];
     let inventoryLoaded = false, inventoryRevision = 0;
     let lastErr = '', liveReady = false, liveLoad = null, loadedAt = 0, catalogAsked = false, priceReq = null, rateAsked = false;
-    let targetSlug = null, view = 'catalog', pending = null, stakeId = null, cashCents = null, itemId = null, busy = false, stakeKey = '';
+    let catalogMin = null, targetSlug = null, view = 'catalog', pending = null, stakeId = null, cashCents = null, itemId = null, busy = false, stakeKey = '';
     const roundKey = 'wxs-gift-round:' + (tgApp?.initDataUnsafe?.user?.id ?? 'anon');
     try { pending = JSON.parse(sessionStorage.getItem(roundKey) || 'null'); } catch { pending = null; }
     targetSlug = pending?.slug || null;
@@ -1275,7 +1275,7 @@ function upgSyncBetInput() {
     }
 
     // ---------- картинки ----------
-    function imageFor(g, lazy) {
+    function imageFor(g, lazy) {          // обычный (не улучшенный) подарок, без фона
         const img = document.createElement('img');
         img.alt = '';
         img.loading = lazy ? 'lazy' : 'eager';
@@ -1283,15 +1283,12 @@ function upgSyncBetInput() {
         img.style.opacity = '0'; img.style.transition = 'opacity .3s ease';
         img.addEventListener('load', () => { img.style.opacity = '1'; });
         img.addEventListener('error', () => {
-            img.addEventListener('error', () => {
-                const f = document.createElement('span');
-                f.className = 'wxs-gift-fallback';
-                f.textContent = '🎁';
-                img.replaceWith(f);
-            }, { once: true });
-            img.src = 'https://api.changes.tg/original/' + encodeURIComponent(g.slug) + '.png?size=256';
+            const f = document.createElement('span');
+            f.className = 'wxs-gift-fallback';
+            f.textContent = '🎁';
+            img.replaceWith(f);
         }, { once: true });
-        img.src = 'https://nft.fragment.com/gift/' + encodeURIComponent(g.slug) + '-1.large.jpg';
+        img.src = 'https://api.changes.tg/original/' + encodeURIComponent(g.slug) + '.png?size=256';
         return img;
     }
 
@@ -1376,7 +1373,7 @@ function upgSyncBetInput() {
         arrow.textContent = '→';
         const mine = () => { if (!upg.busy && !isEconomyLocked) openSheet(); };
         const left = st ? slotEl(st, 'ТВОЯ СТАВКА', mine) : cashCents > 0 ? cashSlot(mine) : slotEl(null, 'ТВОЯ СТАВКА', mine);
-        const right = slotEl(t, 'АПГРЕЙД ДО', () => { if (!upg.busy) openDialog('catalog'); });
+        const right = slotEl(t, 'АПГРЕЙД ДО', () => { if (!upg.busy) openDialog('catalog', t?.cents); });   // каталог только дороже текущей цели
         box.replaceChildren(left, arrow, right);
     }
 
@@ -1473,6 +1470,18 @@ function upgSyncBetInput() {
     G.refreshAlways = () => refreshLive();
     G.imageFor = imageFor; G.giftBy = giftBy; G.money = money;
     G.openInventory = () => openDialog('inventory');
+    // цена продажи подарка (в центах) и продажа пачки подарков одним действием
+    G.sellEstimate = (slug, fallbackUsd) => { const c = sellCents(giftBy(slug)); return c != null ? c : Math.floor(Math.round((fallbackUsd || 0) * 100) * 87 / 100); };
+    G.sellMany = async (ids) => {
+        let balance = null; const sold = [];
+        for (const id of ids) {
+            try { const r = await rpc('gift_upgrade_sell', { p_request: id }); balance = Number(r.balance); sold.push(id); }
+            catch (e) { lastErr = e.message || 'sell'; }
+        }
+        if (balance != null) setUIBalance(balance);
+        if (sold.length) { inventoryRevision++; inventory = inventory.filter((g) => !sold.includes(g.id)); paint(); refreshLive(); }
+        return { sold, balance };
+    };
     G.count = () => inventory.length;
     G.paint = () => paint();
     G.play = async () => {
@@ -1591,6 +1600,7 @@ function upgSyncBetInput() {
         let items = [...all.values()].filter((g) => centsOf(g) != null);
         const st = stakeItem();
         if (st) { const v = centsOf(st); items = items.filter((g) => centsOf(g) > v); }   // только то, что дороже твоего подарка
+        if (catalogMin) items = items.filter((g) => centsOf(g) > catalogMin);                // и дороже текущей цели (если открыли тапом по ней)
         return items.sort((a, b) => centsOf(a) - centsOf(b) || a.name.localeCompare(b.name));
     }
 
@@ -1673,7 +1683,7 @@ function upgSyncBetInput() {
         let items;
         if (view === 'catalog') {
             $('wxsGiftTitle').textContent = 'Каталог подарков';
-            sub.textContent = '';
+            sub.textContent = catalogMin ? 'Дороже ' + moneyC(catalogMin) : '';
             items = catalogItems();
         } else {
             items = visibleInventory();
@@ -1700,8 +1710,9 @@ function upgSyncBetInput() {
         return t?.cents ? inventory.filter((g) => centsOf(g) < t.cents) : inventory;
     }
 
-    function openDialog(v) {
+    function openDialog(v, minCents) {
         view = v;
+        catalogMin = v === 'catalog' && minCents > 0 ? minCents : null;
         search.value = '';
         renderDialog();
         if (!dlg.open) dlg.showModal();
@@ -2144,7 +2155,7 @@ cvGo.addEventListener('click', async () => {
       balance = r.balance; got.push(r);
     }
     if (got.length) {
-      const wins = got.map((r) => ({ slug: r.gift_slug, name: r.name || (window.WXG ? WXG.giftBy(r.gift_slug).name : r.gift_slug), price: Number(r.price) || 0 }));
+      const wins = got.map((r) => ({ slug: r.gift_slug, name: r.name || (window.WXG ? WXG.giftBy(r.gift_slug).name : r.gift_slug), price: Number(r.price) || 0, id: r.item_id }));
       await runSpin(wins);
       if (balance != null) setUIBalance(balance);     // баланс обновляется только после прокрута
       await new Promise((r) => setTimeout(r, 450));
@@ -2157,16 +2168,36 @@ cvGo.addEventListener('click', async () => {
 const rwDlg = $('#reward');
 function showReward(wins) {
   $('#rwList').replaceChildren(...wins.map((w, i) => {
-    const row = document.createElement('div'); row.className = 'rwd-row'; row.style.setProperty('--i', i);
+    const row = document.createElement('div'); row.className = 'rwd-row'; row.style.setProperty('--i', i); if (w.id) row.dataset.id = w.id;
     const im = document.createElement('span'); im.className = 'rwd-img'; im.append(giftImg(w, false, true));
     const nm = document.createElement('b'); nm.className = 'rwd-nm'; nm.textContent = w.name || '';
     const v = document.createElement('i'); v.className = 'rwd-pr'; v.textContent = csMoney(w.price);
     row.append(im, nm, v);
     return row;
   }));
+  rwWins = wins.filter((w) => !isCash(w) && w.id && window.WXG);              // деньги уже на балансе — продаются только подарки
+  rwSellTotal = rwWins.reduce((s, w) => s + WXG.sellEstimate(w.slug, w.price), 0);
+  rwSell.hidden = !rwWins.length; rwSell.disabled = false; rwInvBtn.hidden = false;
+  rwSell.textContent = 'Продать ' + (rwWins.length > 1 ? 'всё ' : '') + 'за ' + csMoney(rwSellTotal / 100);
   if (!rwDlg.open) rwDlg.showModal();
   buzz('heavy'); confetti();
 }
+const rwSell = $('#rwSell'), rwInvBtn = $('#rwInv'); let rwWins = [], rwSellTotal = 0;
+rwSell.onclick = async () => {
+  if (rwSell.disabled || !rwWins.length) return;
+  if (!lockEconomy()) return toast('Подождите, идёт другая операция');
+  rwSell.disabled = true;
+  const before = currentBalance;
+  try {
+    const r = await WXG.sellMany(rwWins.map((w) => w.id));
+    if (r.sold.length) {
+      toast('+' + fmt(r.balance - before), 'win'); buzz('success');
+      $$('#rwList .rwd-row').forEach((row, i) => { if (r.sold.includes(row.dataset.id)) row.style.opacity = '.4'; });
+    }
+    if (r.sold.length === rwWins.length) { rwSell.hidden = true; rwInvBtn.hidden = true; }
+    else { rwWins = rwWins.filter((w) => !r.sold.includes(w.id)); rwSell.disabled = false; showMessage('Не всё удалось продать — остальное лежит в инвентаре.'); }
+  } finally { unlockEconomy(); }
+};
 rwDlg.addEventListener('close', () => { if (cvDlg.open) { idleAll(); } });
 $('#rwClose').onclick = () => closeSheet(rwDlg);
 $('#rwInv').onclick = () => { closeSheet(rwDlg); closeSheet(cvDlg); setTimeout(() => WXG.openInventory(), 260); };
