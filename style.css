@@ -11,26 +11,20 @@ h2{font:800 15px Montserrat;letter-spacing:.12em;color:var(--mu);margin:0 0 12px
 .btn{width:100%;border:0;border-radius:20px;padding:16px;font:800 16px Montserrat;color:#1a1100;background:linear-gradient(90deg,var(--gold),var(--or));margin-top:6px}
 .btn:disabled{opacity:.4}.btn:active{transform:scale(.98)}
 .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-/* liquid glass nav */
-#nav{position:fixed;left:14px;right:14px;bottom:calc(env(safe-area-inset-bottom,0px) + 14px);height:76px;border-radius:38px;z-index:10;touch-action:none;
- background:linear-gradient(135deg,rgba(60,60,64,.78),rgba(34,34,38,.82));backdrop-filter:blur(22px) saturate(1.6);-webkit-backdrop-filter:blur(22px) saturate(1.6);
- border:1px solid rgba(255,255,255,.14);box-shadow:0 10px 40px rgba(0,0,0,.6),inset 0 1px 0 rgba(255,255,255,.18);transition:transform .35s cubic-bezier(.3,1.4,.5,1)}
-#nav.hold{transform:scale(1.035)}
-.tabs{position:absolute;inset:0;display:flex}
-.tab{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;font:700 13px Roboto;color:#a9a9ae;transition:color .2s}
-.tab svg{width:28px;height:28px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+/* нижняя панель */
+#nav{position:fixed;left:14px;right:14px;bottom:calc(env(safe-area-inset-bottom,0px) + 14px);height:72px;border-radius:36px;z-index:10;touch-action:none;
+ -webkit-touch-callout:none;background:rgba(30,30,34,.84);backdrop-filter:blur(22px) saturate(1.5);-webkit-backdrop-filter:blur(22px) saturate(1.5);
+ border:1px solid rgba(255,255,255,.12);box-shadow:0 10px 36px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.14);
+ transition:transform .28s cubic-bezier(.3,1.4,.5,1)}
+#nav.hold{transform:scale(1.02)}
+.tabs{position:absolute;inset:0;display:flex;z-index:1}
+.tab{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;font:700 12.5px Roboto;color:#a9a9ae;transition:color .2s;min-width:0}
+.tab svg{width:26px;height:26px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;transition:fill .2s}
 .tab.on{color:#fff}.tab.on svg{fill:currentColor}
-#pill{position:absolute;top:6px;bottom:6px;border-radius:32px;background:linear-gradient(#6a5338,#4a3a28);border:1px solid rgba(255,255,255,.25);box-shadow:inset 0 1px 0 rgba(255,255,255,.2);transition:left .45s cubic-bezier(.3,1.25,.5,1),width .45s,opacity .2s}
-#nav.hold #pill{opacity:0}
-#lens{position:absolute;top:-8px;height:calc(100% + 16px);border-radius:50px;pointer-events:none;opacity:0;transform:scale(.6);
- background:radial-gradient(120% 90% at 50% 40%,rgba(255,255,255,.34),rgba(255,255,255,.16) 70%);backdrop-filter:blur(1px) brightness(1.35) saturate(1.8);-webkit-backdrop-filter:blur(1px) brightness(1.35) saturate(1.8);
- box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.55),inset 5px 0 12px -4px rgba(120,160,255,.7),inset -5px 0 12px -4px rgba(255,150,90,.6),0 8px 30px rgba(0,0,0,.45);
- transition:opacity .2s,transform .3s cubic-bezier(.3,1.5,.5,1),left .32s cubic-bezier(.3,1.2,.5,1),width .3s}
-#lens.drag{transition:opacity .2s,transform .3s cubic-bezier(.3,1.5,.5,1),width .3s}
-#lens.on{opacity:1;transform:scale(1)}
-#lens::before,#lens::after{content:"";position:absolute;left:18%;right:18%;height:9px;border-radius:9px;background:#050505;box-shadow:0 0 0 1.5px rgba(150,170,255,.55)}
-#lens::before{top:3px}#lens::after{bottom:3px;box-shadow:0 0 0 1.5px rgba(255,170,110,.55)}
-#dot{position:absolute;bottom:-26px;width:26px;height:26px;border-radius:50%;background:rgba(255,255,255,.7);left:50%;margin-left:-13px;pointer-events:none}
+#pill{position:absolute;top:6px;bottom:6px;left:0;width:0;border-radius:30px;background:linear-gradient(180deg,#6a5338,#4a3a28);
+ border:1px solid rgba(255,255,255,.22);box-shadow:inset 0 1px 0 rgba(255,255,255,.18),0 4px 14px rgba(0,0,0,.35);
+ transition:left .4s cubic-bezier(.3,1.2,.5,1),width .3s ease,transform .25s ease,background .2s}
+#pill.drag{transition:width .25s ease,transform .25s ease,background .2s;transform:scale(1.06);background:linear-gradient(180deg,#7d6243,#5c4830)}
 
 /* ===== интеграция ===== */
 :root{--top:calc(env(safe-area-inset-top,0px) + 62px)}
@@ -750,3 +744,50 @@ input,textarea{user-select:text;-webkit-user-select:text}
 .upg-rotor.upg-ghost svg{ filter: none; }
 .upg-stack.is-spinning .upg-ghost{ will-change: transform, opacity; }
 #upgPlayBtn:disabled{ opacity: 1; }
+/* ===== апгрейдер: единый режим ===== */
+.wxs-upg-switch{justify-content:flex-end}
+#upgraderPage .wxs-stake-box{margin:6px 0 16px;padding:14px 10px 12px}
+.wxs-tether{display:block;width:100%;height:100%}.wxs-tether svg{display:block;width:100%;height:100%}
+#upgraderPage .wxs-stake-slot{min-height:132px}
+
+/* ===== шторка «ТВОЯ СТАВКА» ===== */
+.stk{position:fixed;inset:0;z-index:60}
+.stk[hidden]{display:none}
+.stk-back{position:absolute;inset:0;background:rgba(0,0,0,.45);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);opacity:0;transition:opacity .25s ease}
+.stk.open .stk-back{opacity:1}
+.stk-panel{position:absolute;left:0;right:0;bottom:0;height:max(40vh,390px);max-height:90vh;display:flex;flex-direction:column;
+ padding:0 16px calc(env(safe-area-inset-bottom,0px) + 16px);border-radius:28px 28px 0 0;background:linear-gradient(180deg,#1b1a18,#0e0e11);
+ border:1px solid rgba(255,255,255,.1);border-bottom:0;box-shadow:0 -14px 44px rgba(0,0,0,.6);
+ transform:translateY(100%);transition:transform .28s cubic-bezier(.2,.9,.3,1);will-change:transform}
+.stk.open .stk-panel{transform:translateY(0)}
+.stk-panel.dragging{transition:none}
+.stk-head{flex:none;display:grid;place-items:center;height:30px;margin:0 -16px;cursor:grab;touch-action:none}
+.stk-grip{width:44px;height:5px;border-radius:5px;background:rgba(255,255,255,.28)}
+.stk-tabs{flex:none;display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:4px;border-radius:18px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08)}
+.stk-tabs button{border:0;border-radius:14px;padding:12px 0;font:800 14px Montserrat,Arial,sans-serif;color:#9a98a1;background:none;cursor:pointer;transition:background .2s,color .2s}
+.stk-tabs button[aria-pressed="true"]{color:#1a1100;background:linear-gradient(90deg,#ffc61a,#ff9a1c)}
+.stk-body{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;margin:14px 0;-webkit-overflow-scrolling:touch}
+.stk-cash,.stk-gifts{display:block}
+.stk-cash[hidden],.stk-gifts[hidden],.stk-empty[hidden]{display:none}
+.stk-input{display:flex;align-items:center;gap:8px;height:64px;padding:0 18px;border-radius:20px;background:#0a0a0d;border:1px solid rgba(255,255,255,.12);box-shadow:inset 0 2px 8px rgba(0,0,0,.5)}
+.stk-input:focus-within{border-color:rgba(255,198,26,.6)}
+.stk-input input{flex:1;min-width:0;width:100%;height:100%;background:none;border:0;outline:0;color:#fff;font:800 28px Montserrat,Arial,sans-serif;text-align:right;user-select:text;-webkit-user-select:text}
+.stk-input input::placeholder{color:#4a4a50}
+.stk-input span{font:800 24px Montserrat,Arial,sans-serif;color:#8d8d93}
+.stk-hint{text-align:center;color:#8d8d93;font-size:13px;margin:12px 0 0;min-height:18px}
+.stk-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.stk-empty{text-align:center;color:#8d8d93;padding:34px 8px;font-weight:700}
+.stk-ok{flex:none;margin:0}
+
+/* карточки «ТВОЯ СТАВКА → АПГРЕЙД ДО» */
+#upgraderPage .wxs-stake-slot{
+    appearance:none;-webkit-appearance:none;color:#f1efe9;font-family:inherit;
+    background:linear-gradient(180deg,rgba(255,255,255,.08),rgba(255,255,255,.02));
+    border:1px solid rgba(255,255,255,.14);border-radius:22px;padding:12px 6px 10px;
+    box-shadow:inset 0 1px 1px rgba(255,255,255,.14),0 6px 14px rgba(0,0,0,.28);
+    transition:transform .15s ease,border-color .2s ease}
+#upgraderPage .wxs-stake-slot:active{transform:scale(.97)}
+#upgraderPage .wxs-stake-slot.is-empty{border-style:dashed;border-color:rgba(255,255,255,.2)}
+#upgraderPage .wxs-stake-img{width:84px;height:84px}
+#upgraderPage .wxs-stake-slot strong{font-size:13px}
+#upgraderPage .wxs-stake-slot em{font-size:13px}

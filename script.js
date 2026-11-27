@@ -940,6 +940,7 @@ function openUpgrader() {
     showPage('upgraderPage');
     updateNav('games');
     upgInit();
+    window.WXG?.paint();
     if (!upg.busy) {
         upgRefresh(true);
         window.WXG?.refresh();
@@ -1084,11 +1085,10 @@ function upgSyncBetInput() {
 (function () {
     'use strict';
     const page = document.getElementById('upgraderPage');
-    const sw = page?.querySelector('[data-upg-mode]');
-    if (!page || !sw) return;
+    if (!page) return;
     const $ = (id) => document.getElementById(id);
     const tgApp = window.Telegram?.WebApp;
-    const G = window.WXG = { on: false, key: '', sync() {}, center() {}, play() {} };
+    const G = window.WXG = { on: true, key: '', sync() {}, center() {}, play() {} };
 
     // ---------- цены ----------
     // Цена в игре = 97% от флора. Курс GRAM→$ и цены приходят с сервера (gift_upgrade_state);
@@ -1116,7 +1116,7 @@ function upgSyncBetInput() {
     let inventory = [];
     let inventoryLoaded = false, inventoryRevision = 0;
     let lastErr = '', liveReady = false, liveLoad = null, loadedAt = 0, catalogAsked = false, priceReq = null, rateAsked = false;
-    let targetSlug = null, view = 'catalog', pending = null, dollarBet = null, stakeId = null, itemId = null, busy = false;
+    let targetSlug = null, view = 'catalog', pending = null, stakeId = null, cashCents = null, itemId = null, busy = false, stakeKey = '';
     const roundKey = 'wxs-gift-round:' + (tgApp?.initDataUnsafe?.user?.id ?? 'anon');
     try { pending = JSON.parse(sessionStorage.getItem(roundKey) || 'null'); } catch { pending = null; }
     targetSlug = pending?.slug || null;
@@ -1319,55 +1319,57 @@ function upgSyncBetInput() {
         upg.center?.classList.toggle('gift-empty', !t);
         $('wxsGiftCount').textContent = inventoryLoaded || inventory.length ? inventory.length : '—';
         paintStake();
-        G.key = (t?.slug || '') + ':' + (t?.cents ?? '') + ':' + (stakeId || '') + ':' + (liveReady ? 1 : 0);
+        G.key = (t?.slug || '') + ':' + (t?.cents ?? '') + ':' + (stakeId || '') + ':' + (cashCents || '') + ':' + (liveReady ? 1 : 0);
         upg.textKey = null;
         if (upg.ctx) upgDraw();
     }
 
-    // Карточка «ТВОЙ ПОДАРОК → подарок, который апгрейдишь» + кнопка выбора ставки подарком
-    function slotEl(g, caption, onClick) {
+    // Две карточки: «ТВОЯ СТАВКА» → «АПГРЕЙД ДО»
+    const TETHER_SVG = '<svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="16" fill="#26A17B"/><rect x="8" y="8" width="16" height="3.6" rx="1.2" fill="#fff"/><rect x="14.2" y="8" width="3.6" height="16.5" rx="1.2" fill="#fff"/><ellipse cx="16" cy="15.4" rx="8.6" ry="2.6" fill="none" stroke="#fff" stroke-width="1.8"/></svg>';
+
+    function slotRaw(caption, imgNode, nameText, priceText, onClick, isEmpty) {
         const b = document.createElement('button');
         b.type = 'button';
-        b.className = 'wxs-stake-slot' + (g ? '' : ' is-empty');
+        b.className = 'wxs-stake-slot' + (isEmpty ? ' is-empty' : '');
         const cap = document.createElement('small');
         cap.textContent = caption;
         const img = document.createElement('span');
         img.className = 'wxs-stake-img';
-        if (g) img.append(imageFor(g, true)); else img.innerHTML = '＋';
+        if (imgNode) img.append(imgNode); else img.textContent = '＋';
         const name = document.createElement('strong');
-        name.textContent = g ? g.name : 'Выбрать';
+        name.textContent = nameText;
         const price = document.createElement('em');
-        price.textContent = g ? money(usd(g)) : '';
+        price.textContent = priceText || '';
         b.append(cap, img, name, price);
         b.addEventListener('click', onClick);
         return b;
     }
+    function slotEl(g, caption, onClick) {
+        return g ? slotRaw(caption, imageFor(g, true), g.name, money(usd(g)), onClick, false)
+                 : slotRaw(caption, null, 'Выбрать', '', onClick, true);
+    }
+    function cashSlot(onClick) {
+        const holder = document.createElement('span');
+        holder.className = 'wxs-tether';
+        holder.innerHTML = TETHER_SVG;
+        return slotRaw('ТВОЯ СТАВКА', holder, 'Баланс', money(cashCents / 100), onClick, false);
+    }
 
     function paintStake() {
-        const st = G.on ? stakeItem() : null;
-        const t = target();
-        page.classList.toggle('gift-stake', !!st);
-        const btn = $('wxsStakeBtn');
-        if (btn) { btn.hidden = !G.on; btn.classList.toggle('is-active', !!st); }
         const box = $('wxsStakeBox');
         if (!box) return;
-        box.hidden = !st;
-        if (!st) { box.replaceChildren(); return; }
+        const st = stakeItem(), t = target();
+        page.classList.toggle('gift-stake', !!st);
+        const key = [st?.id, st?.slug, st ? centsOf(st) : '', st ? '' : cashCents, t?.slug, t?.cents].join('|');
+        if (key === stakeKey && box.childElementCount) return;      // ничего не изменилось — не перерисовываем картинки
+        stakeKey = key;
         const arrow = document.createElement('span');
         arrow.className = 'wxs-stake-arrow';
         arrow.textContent = '→';
-        const clear = document.createElement('button');
-        clear.type = 'button';
-        clear.className = 'wxs-stake-clear';
-        clear.setAttribute('aria-label', 'Убрать подарок');
-        clear.textContent = '×';
-        clear.addEventListener('click', () => { if (!upg.busy) { stakeId = null; paint(); upgRefresh(true); } });
-        box.replaceChildren(
-            slotEl(st, 'ТВОЙ ПОДАРОК', () => { if (!upg.busy) openDialog('stake'); }),
-            arrow,
-            slotEl(t, 'АПГРЕЙД ДО', () => { if (!upg.busy) openDialog('catalog'); }),
-            clear
-        );
+        const mine = () => { if (!upg.busy && !isEconomyLocked) openSheet(); };
+        const left = st ? slotEl(st, 'ТВОЯ СТАВКА', mine) : cashCents > 0 ? cashSlot(mine) : slotEl(null, 'ТВОЯ СТАВКА', mine);
+        const right = slotEl(t, 'АПГРЕЙД ДО', () => { if (!upg.busy) openDialog('catalog'); });
+        box.replaceChildren(left, arrow, right);
     }
 
     // Ставка и шанс связаны через цену подарка: шанс = 95% · ставка / цена
@@ -1382,13 +1384,25 @@ function upgSyncBetInput() {
             return;
         }
         if (!t?.cents) return;
+        const clampChance = (v) => Math.max(UPG_MIN_CHANCE, Math.min(UPG_MAX_CHANCE, v));
         if (fromBet) {
-            const b = parseFloat(input.value);
-            if (isFinite(b) && b > 0) {
-                upg.chance = Math.max(UPG_MIN_CHANCE, Math.min(UPG_MAX_CHANCE, Math.round(95 * b * 100 / t.cents)));
+            let b = Math.round((parseFloat(input.value) || 0) * 100);
+            if (b > 0) {
+                const top = stakeFor(t.cents, UPG_MAX_CHANCE);
+                if (cashCents != null && b > top) {         // ставка больше, чем нужно для шанса 90% — режем до максимума
+                    b = cashCents = top;
+                    input.value = (top / 100).toFixed(2);
+                    paintStake();
+                }
+                upg.chance = clampChance(Math.round(95 * b / t.cents));
             }
-        } else {
-            input.value = (stakeFor(t.cents, upg.chance) / 100).toFixed(2);
+        } else if (cashCents != null) {                  // двигаем шанс слайдером — ставка пересчитывается
+            const derived = clampChance(Math.round(95 * cashCents / t.cents));
+            if (derived !== upg.chance) {                // шанс не менялся — выбранную сумму не трогаем
+                cashCents = stakeFor(t.cents, upg.chance);
+                input.value = (cashCents / 100).toFixed(2);
+                paintStake();
+            }
         }
     };
 
@@ -1411,12 +1425,13 @@ function upgSyncBetInput() {
         }
         targetSlug = slug;
         paint();
-        upgRefresh(true);
+        upgRefresh(true, !stakeItem() && cashCents > 0 ? 'bet' : undefined);
         if (dlg.open) dlg.close();
     }
 
     function setStake(id) {
         stakeId = id;
+        if (id) cashCents = null;
         const st = stakeItem(), t = target();
         if (st && t && centsOf(t) <= centsOf(st)) targetSlug = null;   // цель должна быть дороже своего подарка
         paint();
@@ -1443,10 +1458,12 @@ function upgSyncBetInput() {
     G.imageFor = imageFor; G.giftBy = giftBy; G.money = money;
     G.openInventory = () => openDialog('inventory');
     G.count = () => inventory.length;
+    G.paint = () => paint();
     G.play = async () => {
         if (upg.busy || isBetProcessing || isEconomyLocked) return;
         const resume = pending?.round ? pending : null;
         let t = target();
+        if (!resume && !stakeItem() && !(cashCents > 0)) return openSheet();
         if (!resume && !t) return openDialog('catalog');
         if (!resume && (!t.offer || !liveReady)) {
             await refreshLive();
@@ -1475,7 +1492,7 @@ function upgSyncBetInput() {
             fn = 'gift_upgrade_play_gift';
             body = { p_request: crypto.randomUUID(), p_quote: t.offer.id, p_stake_round: st.id };
         } else {
-            let stake = Math.round((parseFloat($('upgBetInput').value) || 0) * 100);
+            let stake = cashCents || 0;
             stake = Math.min(stake, stakeFor(t.offer.price_cents, UPG_MAX_CHANCE));
             if (!(stake > 0)) return showMessage('Введите ставку.');
             if (Math.floor(9500 * stake / t.offer.price_cents) < 100) return showMessage('Ставка слишком мала для этого подарка.');
@@ -1669,33 +1686,143 @@ function upgSyncBetInput() {
     dlg.addEventListener('click', (e) => { if (e.target === dlg) dlg.close(); });
     search.addEventListener('input', renderDialog);
     $('wxsGiftInventory').addEventListener('click', () => openDialog('inventory'));
-    $('wxsStakeBtn').addEventListener('click', () => { if (G.on && !upg.busy) openDialog('stake'); });
+    // ---------- шторка «ТВОЯ СТАВКА»: Баланс | Подарки ----------
+    const sheet = $('stkSheet'), stkPanel = $('stkPanel'), stkAmount = $('stkAmount'), stkHint = $('stkHint');
+    const stkTabs = [...sheet.querySelectorAll('[data-stk-tab]')];
+    let sheetTab = 'cash', sheetGift = null, sheetTimer = 0;
 
-    // ---------- переключатель режима ----------
-    function setMode(gifts) {
-        if (upg.busy) return;
-        const input = $('upgBetInput');
-        if (gifts && !G.on) dollarBet = input?.value ?? null;
-        if (!gifts && G.on && dollarBet != null && input) input.value = dollarBet;
-        G.on = gifts;
-        page.classList.toggle('gift-mode', gifts);
-        $('wxsGiftInventory').hidden = !gifts;
-        document.querySelectorAll('[data-upg-mode]').forEach((b) => b.setAttribute('aria-pressed', String((b.dataset.upgMode === 'gifts') === gifts)));
-        upgSyncBetInput();
-        $('upgPlayBtn').textContent = gifts && pending ? 'ПРОВЕРИТЬ СТАВКУ' : 'ИГРАТЬ';
-        ensureCenter();
-        clearInterval(G.timer);
-        if (gifts) {
-            refreshLive();
-            // цены и котировки на сервере обновляются раз в час — подтягиваем, пока открыт режим подарков
-            G.timer = setInterval(() => {
-                if (!document.hidden && !upg.busy && !page.classList.contains('hidden')) refreshLive();
-            }, 60000);
+    function sheetTargetCents() { return target()?.cents || null; }
+
+    function updateHint() {
+        const t = sheetTargetCents();
+        const v = parseFloat(stkAmount.value);
+        let text = 'Доступно: ' + money(currentBalance);
+        if (t && isFinite(v) && v > 0) {
+            const bp = Math.min(9000, Math.floor(9500 * Math.round(v * 100) / t));
+            text += bp < 100 ? ' · ставка слишком мала' : ' · шанс ≈ ' + (bp / 100).toFixed(bp % 100 ? 2 : 0) + '%';
         }
-        paint();
-        upgRefresh(true);
+        stkHint.textContent = text;
     }
-    document.querySelectorAll('[data-upg-mode]').forEach((b) => b.addEventListener('click', () => setMode(b.dataset.upgMode === 'gifts')));
+
+    function renderSheet() {
+        stkTabs.forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.stkTab === sheetTab)));
+        $('stkCash').hidden = sheetTab !== 'cash';
+        $('stkGifts').hidden = sheetTab !== 'gift';
+        if (sheetTab === 'cash') return updateHint();
+        const t = sheetTargetCents();
+        const items = inventory.filter((g) => !t || centsOf(g) < t);
+        const listEl = $('stkGiftList'), emptyEl = $('stkGiftEmpty');
+        listEl.replaceChildren(...items.map((g) => {
+            const b = document.createElement('button');
+            b.type = 'button';
+            b.className = 'wxs-gift-card' + (g.id === sheetGift ? ' is-selected' : '');
+            const frame = document.createElement('span');
+            frame.className = 'wxs-gift-img';
+            frame.append(imageFor(g, true));
+            const name = document.createElement('strong');
+            name.textContent = g.name;
+            const price = document.createElement('em');
+            price.textContent = money(usd(g));
+            b.append(frame, name, price);
+            b.addEventListener('click', () => { sheetGift = g.id; window.haptic?.('select'); renderSheet(); });
+            return b;
+        }));
+        emptyEl.hidden = items.length > 0;
+        emptyEl.textContent = !inventory.length ? (liveLoad && !inventoryLoaded ? 'Загружаем подарки…' : 'В инвентаре пока нет подарков')
+            : 'Нет подарков дешевле выбранного апгрейда';
+    }
+
+    function openSheet() {
+        if (upg.busy || isEconomyLocked) return;
+        clearTimeout(sheetTimer);
+        sheetTab = stakeItem() ? 'gift' : 'cash';
+        sheetGift = stakeId;
+        stkAmount.value = cashCents > 0 ? (cashCents / 100).toFixed(2) : '';
+        stkPanel.style.transform = '';
+        renderSheet();
+        sheet.hidden = false;
+        void sheet.offsetWidth;                          // запускаем анимацию выезда
+        sheet.classList.add('open');
+        refreshLive().then(() => { if (!sheet.hidden) renderSheet(); });
+    }
+    function closeSheet() {
+        sheet.classList.remove('open');
+        stkPanel.style.transform = '';
+        try { stkAmount.blur(); } catch {}
+        clearTimeout(sheetTimer);
+        sheetTimer = setTimeout(() => { if (!sheet.classList.contains('open')) sheet.hidden = true; }, 280);
+    }
+    G.openSheet = openSheet;
+
+    stkTabs.forEach((b) => b.addEventListener('click', () => { sheetTab = b.dataset.stkTab; window.haptic?.('select'); renderSheet(); }));
+    stkAmount.addEventListener('input', () => {
+        let v = stkAmount.value.replace(',', '.').replace(/[^\d.]/g, '');
+        const i = v.indexOf('.');
+        if (i >= 0) v = v.slice(0, i + 1) + v.slice(i + 1).replace(/\./g, '').slice(0, 2);
+        if (v !== stkAmount.value) stkAmount.value = v;
+        updateHint();
+    });
+    sheet.querySelector('.stk-back').addEventListener('click', closeSheet);
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !sheet.hidden) closeSheet(); });
+
+    // свайп вниз по язычку закрывает шторку
+    (function dragToClose() {
+        const head = sheet.querySelector('.stk-head');
+        let y0 = null, dy = 0;
+        head.addEventListener('pointerdown', (e) => { y0 = e.clientY; dy = 0; head.setPointerCapture(e.pointerId); stkPanel.classList.add('dragging'); });
+        head.addEventListener('pointermove', (e) => {
+            if (y0 == null) return;
+            dy = Math.max(0, e.clientY - y0);
+            stkPanel.style.transform = 'translateY(' + dy + 'px)';
+        });
+        const end = () => {
+            if (y0 == null) return;
+            y0 = null;
+            stkPanel.classList.remove('dragging');
+            if (dy > 80) closeSheet(); else stkPanel.style.transform = '';
+        };
+        head.addEventListener('pointerup', end);
+        head.addEventListener('pointercancel', end);
+    })();
+
+    $('stkOk').addEventListener('click', () => {
+        if (upg.busy || isEconomyLocked) return closeSheet();
+        if (sheetTab === 'gift') {
+            if (!sheetGift) return showMessage('Выберите подарок из инвентаря.');
+            if (!inventory.some((g) => g.id === sheetGift)) { sheetGift = null; renderSheet(); return showMessage('Этот подарок уже недоступен.'); }
+            setStake(sheetGift);
+            return closeSheet();
+        }
+        let cents = Math.round((parseFloat(stkAmount.value) || 0) * 100);
+        if (!(cents >= 10)) return showMessage('Минимальная ставка — 0.10 $.');
+        if (cents / 100 > currentBalance + 1e-9) return showMessage('Недостаточно средств на балансе!');
+        const t = target();
+        if (t?.cents) {
+            const maxStake = stakeFor(t.cents, UPG_MAX_CHANCE);
+            if (cents > maxStake) {
+                cents = maxStake;
+                toast('Ставка уменьшена до ' + money(cents / 100) + ' — максимальный шанс 90%', '', 3200);
+            }
+            if (Math.floor(9500 * cents / t.cents) < 100) return showMessage('Ставка слишком мала для этого подарка.');
+        }
+        stakeId = null;
+        cashCents = cents;
+        $('upgBetInput').value = (cents / 100).toFixed(2);
+        paint();
+        upgRefresh(true, 'bet');
+        closeSheet();
+    });
+
+    // ---------- старт: режим один — апгрейд подарка ----------
+    page.classList.add('gift-mode');
+    $('wxsGiftInventory').hidden = false;
+    $('upgPlayBtn').textContent = pending ? 'ПРОВЕРИТЬ СТАВКУ' : 'ИГРАТЬ';
+    clearInterval(G.timer);
+    // цены и котировки на сервере обновляются раз в час — подтягиваем, пока открыт апгрейдер
+    G.timer = setInterval(() => {
+        if (!document.hidden && !upg.busy && !page.classList.contains('hidden')) refreshLive();
+    }, 60000);
+    paint();
 })();
 /* =====================================================================
    5. профиль, кейсы, навигация
@@ -1781,48 +1908,72 @@ $('#topup').onclick = async () => {
   } finally { unlockEconomy(); }
 };
 
-/* ---- нижняя навигация «liquid glass» ---- */
+/* ---- нижняя панель ---- */
 const PAGES = { cases: 'p-cases', up: 'upgraderPage', prof: 'p-prof' };
-const nav = $('#nav'), pill = $('#pill'), lens = $('#lens'), tabs = $$('.tab');
-let cur = 1, holding = false, hover = 1;
+const nav = $('#nav'), pill = $('#pill'), tabs = $$('.tab');
+let cur = 1, hoverIdx = 1, navDown = null;
 const geo = (i) => { const r = tabs[i].getBoundingClientRect(), n = nav.getBoundingClientRect(); return { l: r.left - n.left, w: r.width }; };
-function place(i, el, grow) { const g = geo(i), w = g.w * (grow || 1); el.style.left = (g.l - (w - g.w) / 2) + 'px'; el.style.width = w + 'px'; }
+function place(i, grow) {
+  const g = geo(i), base = Math.max(0, g.w - 8), w = base * (grow || 1);
+  pill.style.width = w + 'px';
+  pill.style.left = (g.l + 4 - (w - base) / 2) + 'px';
+}
+function markTabs(i) { tabs.forEach((t, k) => t.classList.toggle('on', k === i)); }
 function show(i) {
   const t = tabs[i].dataset.t;
-  tabs.forEach((x, k) => x.classList.toggle('on', k === i));
+  markTabs(i);
   $$('.page').forEach((p) => { const on = p.id === PAGES[t]; p.classList.toggle('on', on); p.classList.toggle('hidden', !on); });
-  if (t === 'up') openUpgrader();                // инициализирует колесо, подгружает фрибеты и подарки
+  if (t === 'up') openUpgrader();                // инициализирует колесо, подгружает подарки
   if (t === 'cases' && !casesList.length) loadCases();
   if (t === 'prof') { $('#giftCount').textContent = window.WXG ? WXG.count() : '—'; if (window.WXG) WXG.refreshAlways(); queueSync(0); }
 }
-const nearest = (x) => { let b = 0, d = 1e9; tabs.forEach((t, i) => { const r = t.getBoundingClientRect(), dd = Math.abs(x - (r.left + r.width / 2)); if (dd < d) { d = dd; b = i; } }); return b; };
-function move(x) {
-  const n = nav.getBoundingClientRect(), g = geo(0), w = g.w * 1.12;
-  const c = Math.max(w / 2 - 6, Math.min(n.width - w / 2 + 6, x - n.left));
-  lens.style.left = (c - w / 2) + 'px'; lens.style.width = w + 'px';
-  const i = nearest(x);
-  if (i !== hover) { hover = i; buzz('light'); tabs.forEach((t, k) => t.classList.toggle('on', k === i)); }
+function nearest(x) {
+  let b = 0, d = Infinity;
+  tabs.forEach((t, i) => { const r = t.getBoundingClientRect(), dd = Math.abs(x - (r.left + r.width / 2)); if (dd < d) { d = dd; b = i; } });
+  return b;
+}
+function followPill(x) {                          // пилюля едет за пальцем, но не выходит за края панели
+  const n = nav.getBoundingClientRect(), g = geo(0), w = Math.max(0, g.w - 8) * 1.06;
+  const c = Math.max(w / 2 + 4, Math.min(n.width - w / 2 - 4, x - n.left));
+  pill.style.width = w + 'px'; pill.style.left = (c - w / 2) + 'px';
+}
+function navFinish(e, cancelled) {                // единая точка завершения: вызывается один раз
+  if (!navDown) return;
+  const d = navDown; navDown = null;
+  nav.classList.remove('hold'); pill.classList.remove('drag');
+  try { nav.releasePointerCapture(d.id); } catch (err) {}
+  const i = cancelled || !e ? cur : nearest(e.clientX);
+  if (i !== cur) { cur = i; place(cur); show(cur); buzz('light'); }
+  else { place(cur); markTabs(cur); }
+  hoverIdx = cur;
 }
 nav.addEventListener('pointerdown', (e) => {
-  holding = true; nav.setPointerCapture(e.pointerId); nav.classList.add('hold'); lens.classList.add('drag');
-  place(cur, lens, 1.12); lens.classList.add('on'); hover = -1; move(e.clientX); buzz('medium');
+  if (navDown) return;
+  navDown = { id: e.pointerId, x0: e.clientX, moved: false };
+  try { nav.setPointerCapture(e.pointerId); } catch (err) {}
+  nav.classList.add('hold'); buzz('medium');
 });
-nav.addEventListener('pointermove', (e) => { if (holding) move(e.clientX); });
-const navUp = (e) => {
-  if (!holding) return;
-  holding = false;
-  const i = nearest(e.clientX);
-  lens.classList.remove('drag'); place(i, lens, 1.12);
-  setTimeout(() => { cur = i; place(i, pill); show(i); nav.classList.remove('hold'); lens.classList.remove('on'); }, 180);
-  buzz('light');
-};
-nav.addEventListener('pointerup', navUp); nav.addEventListener('pointercancel', navUp);
-addEventListener('resize', () => place(cur, pill));
-document.addEventListener('visibilitychange', () => { if (!document.hidden) queueSync(200); });
+nav.addEventListener('pointermove', (e) => {
+  if (!navDown || e.pointerId !== navDown.id) return;
+  if (!navDown.moved && Math.abs(e.clientX - navDown.x0) > 8) { navDown.moved = true; pill.classList.add('drag'); }
+  if (navDown.moved) {
+    followPill(e.clientX);
+    const i = nearest(e.clientX);
+    if (i !== hoverIdx) { hoverIdx = i; markTabs(i); buzz('select'); }
+  }
+});
+nav.addEventListener('pointerup', (e) => navFinish(e, false));
+nav.addEventListener('pointercancel', () => navFinish(null, true));
+nav.addEventListener('lostpointercapture', () => navFinish(null, true));
+nav.addEventListener('contextmenu', (e) => e.preventDefault());
+window.addEventListener('blur', () => navFinish(null, true));
+if (window.ResizeObserver) new ResizeObserver(() => { if (!navDown) place(cur); }).observe(nav);
+addEventListener('resize', () => { if (!navDown) place(cur); });
+document.addEventListener('visibilitychange', () => { if (document.hidden) navFinish(null, true); else queueSync(200); });
 
 /* ---- старт ---- */
 if (!tg || !tg.initData) setTimeout(() => showMessage(NO_TG), 600);
-place(cur, pill);
+place(cur);
 show(cur);                                        // открывает апгрейдер
 loadCases();
 bootPlayer().then(() => { if (window.WXG) WXG.refreshAlways(); });
