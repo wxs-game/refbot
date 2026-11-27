@@ -955,3 +955,71 @@ button{font-family:inherit}
 .wxs-gift-art{border-radius:0!important;overflow:visible!important}
 .wxs-item-img{border-radius:0!important;overflow:visible!important}
 .wxs-stake-slot:not(.is-empty) .wxs-stake-img{border-radius:0;overflow:visible}
+
+
+/* ===================================================================
+   ЕДИНЫЙ СТИЛЬ (как во вкладке «Кейсы»): тёмные карточки r26, синий акцент,
+   кнопки-таблетки, плавное появление. Подключено в самом конце файла.
+   =================================================================== */
+:root{--ac:#3b82f6;--ac2:#2f7bff;--sf:#1a1c21;--sf2:#1d1f24;--sf3:#23252b}
+.page{padding-left:14px;padding-right:14px}
+
+/* ---------- карточки ---------- */
+.wheel-card,.card{position:relative;overflow:hidden;isolation:isolate;border:0;border-radius:26px;background:linear-gradient(180deg,#22242a,#17181c)}
+.wheel-card::after,.card.prof::after{content:"";position:absolute;left:8%;right:8%;bottom:0;height:3px;border-radius:3px;background:var(--ac);box-shadow:0 0 18px 2px var(--ac);opacity:.9;pointer-events:none}
+.upg-slider-card,.upg-panel,.wxs-stake-box{background:var(--sf2)!important;border:0!important;box-shadow:none!important;border-radius:22px;-webkit-backdrop-filter:none!important;backdrop-filter:none!important}
+.stats{background:var(--sf2);border-radius:22px}
+.stats small{color:#8d8f98}
+
+/* ---------- кнопки: как «Открыть» в кейсах ---------- */
+.mines-main-btn,.btn{display:flex;align-items:center;justify-content:center;width:100%;min-height:54px;padding:0 16px;border:0;border-radius:999px;background:var(--ac2);color:#fff;
+ font:700 17px/1 Roboto,Arial,sans-serif;letter-spacing:0;box-shadow:0 8px 26px rgba(47,123,255,.35)}
+.btn{margin-top:8px}
+.btn.ghost{background:rgba(255,255,255,.08);color:#fff;border:0;box-shadow:none}
+.mines-main-btn:disabled,.btn:disabled{opacity:.5;box-shadow:none}
+.wxs-item-btn{min-height:50px;border-radius:999px;border:0;background:rgba(255,255,255,.08);box-shadow:none;font:700 16px/1 Roboto,Arial,sans-serif;color:#fff}
+.wxs-item-btn.is-gold{background:var(--ac2);box-shadow:0 8px 26px rgba(47,123,255,.35)}
+.wxs-inv-btn{border:1px solid rgba(255,255,255,.06);background:rgba(255,255,255,.07);color:#fff;font:600 14px/1 Roboto,Arial,sans-serif;padding:11px 16px}
+.wxs-inv-btn b{background:var(--ac);color:#fff}
+
+/* ---------- акцент: золото → синий ---------- */
+.upg-slider-heading output{color:var(--ac)}
+.upg-glass-rail{background:linear-gradient(90deg,#2f7bff,#3b82f6 60%,#7ab0ff)}
+.wxs-stake-slot em,.wxs-stake-arrow{color:var(--ac)}
+.wxs-stake-slot small{color:#6b6d76}
+.upg-live-dot{background:var(--ac)}
+
+/* ---------- слоты ставки и цели ---------- */
+.wxs-stake-slot{border-radius:18px;background:var(--sf3);border:1px solid rgba(255,255,255,.05);transition:transform .18s ease,box-shadow .25s ease}
+.wxs-stake-slot:active{transform:scale(.97)}
+
+/* ---------- шторки (каталог, инвентарь, ставка) ---------- */
+.wxs-sheet{background:linear-gradient(180deg,#1f2025,#0f1013);border:0}
+.wxs-sheet h2{display:inline-flex;align-items:center;min-height:42px;padding:0 18px;border-radius:999px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.06);font:600 16px/1 Roboto,Arial,sans-serif}
+.wxs-sheet header p{margin:8px 0 0 6px;color:#6b6d76}
+.wxs-sheet header button,.wxs-sheet-back{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.06);color:#fff}
+.wxs-sheet input[type="search"]{border-radius:999px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.06);padding-left:18px}
+.wxs-sheet input[type="search"]:focus{border-color:var(--ac)}
+.wxs-gift-grid{gap:8px}
+.wxs-gift-card{border-radius:18px;background:var(--sf3);border:1px solid rgba(255,255,255,.05);box-shadow:none;animation:csIn .4s cubic-bezier(.2,.8,.2,1) both}
+.wxs-gift-card em{background:rgba(0,0,0,.42);color:#fff;font:700 12px/1 Roboto,Arial,sans-serif;padding:5px 10px}
+.wxs-gift-card strong{color:#fff;font-weight:600}
+.wxs-gift-card.is-selected{border-color:transparent;box-shadow:0 0 0 2px var(--ac),0 0 24px rgba(59,130,246,.5)}
+.wxs-gift-grid>:nth-child(1){animation-delay:0ms}.wxs-gift-grid>:nth-child(2){animation-delay:35ms}.wxs-gift-grid>:nth-child(3){animation-delay:70ms}.wxs-gift-grid>:nth-child(4){animation-delay:105ms}.wxs-gift-grid>:nth-child(5){animation-delay:140ms}.wxs-gift-grid>:nth-child(6){animation-delay:175ms}.wxs-gift-grid>:nth-child(7){animation-delay:210ms}.wxs-gift-grid>:nth-child(8){animation-delay:245ms}.wxs-gift-grid>:nth-child(9){animation-delay:280ms}.wxs-gift-grid>:nth-child(10){animation-delay:315ms}.wxs-gift-grid>:nth-child(11){animation-delay:350ms}.wxs-gift-grid>:nth-child(12){animation-delay:385ms}
+.wxs-item h3{font:700 20px/1.1 Montserrat,Arial,sans-serif}
+.wxs-item-price{color:var(--ac)}
+
+/* ---------- шторка «Твоя ставка» ---------- */
+.stk-panel{background:linear-gradient(180deg,#1f2025,#0f1013);border:0}
+.stk-tabs{border-radius:999px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.06)}
+.stk-tabs button{border-radius:999px;font:600 16px Roboto,Arial,sans-serif;color:#b5b7bf;transition:background .3s cubic-bezier(.3,1.2,.4,1),color .25s,box-shadow .3s}
+.stk-tabs button[aria-pressed="true"]{color:#fff;background:var(--ac);box-shadow:0 4px 16px rgba(59,130,246,.4)}
+.stk-input{border-radius:22px;background:var(--sf2);border:1px solid rgba(255,255,255,.06);box-shadow:none}
+.stk-input:focus-within{border-color:var(--ac)}
+.stk-ok{margin:0}
+
+/* ---------- появление экранов: как у карточек кейсов ---------- */
+.page.on .upg-card>*,.page.on .prof,.page.on .stats,.page.on>.btn{animation:csIn .45s cubic-bezier(.2,.8,.2,1) both}
+.page.on .upg-card>:nth-child(2){animation-delay:40ms}.page.on .upg-card>:nth-child(3){animation-delay:80ms}.page.on .upg-card>:nth-child(4){animation-delay:120ms}
+.page.on .stats{animation-delay:50ms}.page.on>.btn:nth-of-type(1){animation-delay:100ms}.page.on>.btn:nth-of-type(2){animation-delay:140ms}
+@media (prefers-reduced-motion:reduce){.wxs-gift-card,.page.on .upg-card>*,.page.on .prof,.page.on .stats,.page.on>.btn{animation:none}}
