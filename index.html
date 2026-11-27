@@ -76,9 +76,8 @@
 
  <dialog id="reward" class="wxs-sheet rwd" aria-labelledby="rwTitle">
   <div class="wxs-sheet-grip" aria-hidden="true"></div>
-  <div class="cv-top"><span class="cv-pill" id="rwTitle">Поздравляем!</span><span class="cv-pill cv-tag" id="rwTag" hidden>demo</span></div>
+  <div class="cv-top"><span class="cv-pill" id="rwTitle">Поздравляем!</span></div>
   <div class="rwd-list" id="rwList"></div>
-  <div class="rwd-total" id="rwTotal"></div>
   <button class="cv-go" id="rwClose" type="button">Ок</button>
   <button class="cv-go ghost" id="rwInv" type="button">В инвентарь</button>
  </dialog>
@@ -124,12 +123,12 @@
    <span class="cv-pill" id="cvTitle"></span>
    <button type="button" class="cv-pill cv-demo" id="cvDemo" aria-pressed="false">Демо</button>
   </div>
+  <div class="cv-scroll" id="cvScroll">
   <div id="cvReels" class="cv-reels" style="--n:1"></div>
   <div id="cvQty" class="cv-qty" role="group" aria-label="Сколько кейсов открыть" style="--k:0">
    <i class="cv-qthumb" aria-hidden="true"></i>
    <button type="button" data-n="1" aria-pressed="true">1</button><button type="button" data-n="2" aria-pressed="false">2</button><button type="button" data-n="3" aria-pressed="false">3</button>
   </div>
-  <div class="cv-scroll" id="cvScroll">
    <h3 class="cv-h">Наличие</h3>
    <div id="cvGrid" class="cv-grid"></div>
    <p id="cvEmpty" class="cv-empty" hidden>Состав кейса пока недоступен.</p>

@@ -918,9 +918,9 @@ button{font-family:inherit}
 .cv-qty button{position:relative;z-index:1;appearance:none;border:0;background:none;padding:13px 0;font:600 18px/1 Roboto,Arial,sans-serif;color:#b5b7bf;transition:color .25s;-webkit-tap-highlight-color:transparent}
 .cv-qty button[aria-pressed="true"]{color:#fff}
 .is-busy .cv-qty,.is-busy .cv-demo{opacity:.5;pointer-events:none}
-.cv-scroll{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:none;margin:0 -14px;padding:0 14px 8px;-webkit-overflow-scrolling:touch}
+.cv-scroll{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:none;margin:0 -14px;padding:2px 14px 8px;-webkit-overflow-scrolling:touch}
 .cv-scroll::-webkit-scrollbar{display:none}
-.cv-h{margin:18px 2px 10px;font:600 14px Roboto,Arial,sans-serif;letter-spacing:.08em;text-transform:uppercase;color:#6b6d76}
+.cv-h{position:sticky;top:0;z-index:5;margin:0 -14px;padding:16px 16px 10px;font:600 14px Roboto,Arial,sans-serif;letter-spacing:.08em;text-transform:uppercase;color:#6b6d76;background:linear-gradient(180deg,#1b1b20 72%,rgba(27,27,32,0))}
 .cv-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
 .cv-grid .cv-it{aspect-ratio:1/.95;content-visibility:auto;contain-intrinsic-size:auto 110px}
 .cv-empty{text-align:center;color:var(--mu);padding:24px 0}
@@ -939,7 +939,7 @@ button{font-family:inherit}
 @keyframes rwdIn{from{opacity:0;transform:translateY(12px) scale(.94)}}
 .rwd-img{flex:none;display:grid;place-items:center;width:58px;height:58px;border-radius:15px;overflow:hidden;background:linear-gradient(135deg,#3d86ff,#2a5fd6)}
 .rwd-img img{width:88%;height:88%;object-fit:contain}
-.rwd-tx{display:grid;gap:3px;min-width:0;flex:1}
+.rwd-nm{flex:1;min-width:0;font:600 16px/1.2 Roboto,Arial,sans-serif;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .rwd-tx b{font:600 16px/1.2 Roboto,Arial,sans-serif;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .rwd-tx small{font-size:13px;color:#8d8f98}
 .rwd-pr{font:700 15px/1 Roboto,Arial,sans-serif;font-style:normal;color:#fff}

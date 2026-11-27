@@ -2114,6 +2114,7 @@ cvGo.addEventListener('click', async () => {
   if (cv.dirty) { idleAll(); await new Promise((r) => requestAnimationFrame(r)); }
   if (demo) {
     cv.busy = true; syncGo();
+    $('#cvScroll').scrollTo({ top: 0, behavior: 'smooth' });
     try {
       const wins = Array.from({ length: n }, () => pickWeighted(cv.pool));
       await runSpin(wins);
@@ -2125,6 +2126,7 @@ cvGo.addEventListener('click', async () => {
   if (c.cost * n > currentBalance + 1e-9) return showMessage('Недостаточно средств для открытия кейса.');
   if (!lockEconomy()) return toast('Подождите, идёт другая операция');
   cv.busy = true; syncGo(); buzz('medium');
+  $('#cvScroll').scrollTo({ top: 0, behavior: 'smooth' });
   let balance = null; const got = [];
   try {
     for (let i = 0; i < n; i++) {                    // каждый кейс — отдельный идемпотентный запрос
@@ -2145,19 +2147,15 @@ cvGo.addEventListener('click', async () => {
 /* ---- «Поздравляем!» ---- */
 const rwDlg = $('#reward');
 function showReward(wins, demo) {
-  $('#rwTag').hidden = !demo; $('#rwInv').hidden = demo;
+  $('#rwInv').hidden = demo;
   $('#rwList').replaceChildren(...wins.map((w, i) => {
     const row = document.createElement('div'); row.className = 'rwd-row'; row.style.setProperty('--i', i);
     const im = document.createElement('span'); im.className = 'rwd-img'; im.append(giftImg(w, false));
-    const tx = document.createElement('span'); tx.className = 'rwd-tx';
-    const nm = document.createElement('b'); nm.textContent = w.name || '';
-    const pr = document.createElement('small'); pr.textContent = demo ? 'demo' : csMoney(w.price);
-    tx.append(nm, pr); row.append(im, tx);
-    if (!demo) { const v = document.createElement('i'); v.className = 'rwd-pr'; v.textContent = csMoney(w.price); row.append(v); pr.hidden = true; }
+    const nm = document.createElement('b'); nm.className = 'rwd-nm'; nm.textContent = w.name || '';
+    const v = document.createElement('i'); v.className = 'rwd-pr'; v.textContent = csMoney(w.price);
+    row.append(im, nm, v);
     return row;
   }));
-  $('#rwTotal').textContent = !demo && wins.length > 1 ? 'Итого: ' + csMoney(wins.reduce((s, w) => s + (Number(w.price) || 0), 0)) : '';
-  $('#rwTotal').hidden = !$('#rwTotal').textContent;
   if (!rwDlg.open) rwDlg.showModal();
   buzz('heavy'); confetti();
 }
