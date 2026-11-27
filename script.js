@@ -2369,6 +2369,10 @@ function payWatch(minutes) {
   payWatchTimer = setTimeout(tick, 2500);
 }
 window.paySync = paySync;
+// Возврат из CryptoBot/xRocket часто останавливает таймеры мини-приложения.
+// Поэтому сразу перепроверяем все счета, как только пользователь вернулся.
+document.addEventListener('visibilitychange', () => { if (!document.hidden) setTimeout(paySync, 500); });
+window.addEventListener('pageshow', () => setTimeout(paySync, 1200));
 
 /* TonConnect */
 let tcui = null;
