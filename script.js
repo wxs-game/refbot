@@ -2378,7 +2378,6 @@ async function paySync() {                                     // сервер �
   for (const c of r.credited || []) if (!seenDep.has(c.id)) { seenDep.add(c.id); fresh += c.usd; }
   if (fresh > 0) {
     buzz('success');
-    toast('✓ ПОПОЛНЕНИЕ ЗАЧИСЛЕНО\n+' + fresh.toFixed(2) + ' $', 'win deposit', 4200);
     queueSync(0);
   }
   return r;
