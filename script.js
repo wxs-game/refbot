@@ -2309,40 +2309,98 @@ rwDlg.addEventListener('cancel', (e) => { e.preventDefault(); closeSheet(rwDlg);
 
 /* ---- профиль ---- */
 $('#openInv').onclick = () => WXG.openInventory();
-/* ---- пополнение (пока только визуал, без реальных платежей) ---- */
+/* ---- пополнение: xRocket / CryptoBot / TON (TonConnect). Деньги считает ТОЛЬКО сервер ---- */
+const PAY_URL = SUPABASE_URL + '/functions/v1/payments';
+const APP_URL = 'https://wxs-game.github.io/refbot';
+const TONCONNECT_MANIFEST_URL = APP_URL + '/tonconnect-manifest.json';
+async function payApi(action, args) {
+  if (!(tg && tg.initData)) return { ok: false, error: NO_TG };
+  try {
+    const r = await fetch(PAY_URL, { method: 'POST', headers: { 'Content-Type': 'application/json', apikey: SUPABASE_ANON_KEY },
+      body: JSON.stringify(Object.assign({ action, init: tg.initData }, args || {})), signal: AbortSignal.timeout(15000) });
+    return (await r.json()) || { ok: false, error: 'Пустой ответ сервера' };
+  } catch (e) { return { ok: false, error: 'Нет соединения с сервером' }; }
+}
+const seenDep = (() => {                                       // чтобы «Баланс пополнен» показывался один раз на инвойс
+  let s = []; try { s = JSON.parse(localStorage.getItem('upg_seen_dep') || '[]'); } catch (e) {}
+  return { has: (id) => s.includes(id), add: (id) => { s.push(id); s = s.slice(-60); try { localStorage.setItem('upg_seen_dep', JSON.stringify(s)); } catch (e) {} } };
+})();
+let payWatchTimer = 0, payWatchUntil = 0;
+async function paySync() {                                     // сервер сам перепроверяет провайдеров/блокчейн и зачисляет ровно один раз
+  const r = await payApi('sync');
+  if (!r.ok) return r;
+  let fresh = 0;
+  for (const c of r.credited || []) if (!seenDep.has(c.id)) { seenDep.add(c.id); fresh += c.usd; }
+  if (fresh > 0) { buzz('success'); toast('Баланс пополнен на +' + fresh.toFixed(2) + ' $', 'win', 3600); queueSync(0); }
+  return r;
+}
+function payWatch(minutes) {
+  payWatchUntil = Math.max(payWatchUntil, Date.now() + minutes * 60000);
+  clearTimeout(payWatchTimer);
+  const tick = async () => {
+    const r = await paySync();
+    if (r && r.ok && (r.pending || []).length && Date.now() < payWatchUntil) payWatchTimer = setTimeout(tick, 3500);
+  };
+  payWatchTimer = setTimeout(tick, 2500);
+}
+window.paySync = paySync;
+
+/* TonConnect */
+let tcui = null;
+function tonUI() {
+  if (tcui) return tcui;
+  if (!window.TON_CONNECT_UI) return null;
+  tcui = new TON_CONNECT_UI.TonConnectUI({ manifestUrl: TONCONNECT_MANIFEST_URL });
+  return tcui;
+}
+function commentBoc(text) {                                    // BOC одной ячейки: 32 бита 0 + UTF-8 комментарий
+  const t = new TextEncoder().encode(text), len = 4 + t.length;
+  if (len > 127) throw new Error('comment too long');
+  const b = [0xb5, 0xee, 0x9c, 0x72, 0x01, 0x01, 0x01, 0x01, 0x00, 2 + len, 0x00, 0x00, len * 2, 0, 0, 0, 0, ...t];
+  return btoa(String.fromCharCode(...b));
+}
+function openPayLink(url) {
+  if (/^https:\/\/t\.me\//.test(url) && tg && tg.openTelegramLink) tg.openTelegramLink(url);
+  else if (tg && tg.openLink) tg.openLink(url); else window.open(url, '_blank');
+}
+
 (function topupSheet() {
-  const sheet = $('#tpSheet'), panel = $('#tpPanel'), input = $('#tpInput');
+  const sheet = $('#tpSheet'), panel = $('#tpPanel'), input = $('#tpInput'), payBtn = $('#tpPay');
   const FALLBACK = (bg, t) => 'data:image/svg+xml,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><rect width="48" height="48" rx="12" fill="${bg}"/><text x="24" y="30" text-anchor="middle" font-size="13" font-weight="800" fill="#fff" font-family="Arial">${t}</text></svg>`);
   const IMG = (f, bg, t) => `<img src="${f}" alt="" draggable="false" onerror="this.onerror=null;this.src='${FALLBACK(bg, t)}'">`;
-  const GRAM = IMG('Gram.png', '#3b82f6', 'GRAM');
+  const GRAM = IMG('gram.png', '#3b82f6', 'TON');
   const USD = '<b class="tp-usd">$</b>';
   const METHODS = [
-    { id: 'gram', name: 'GRAM', tag: '+15%', ico: IMG('Gram.png', '#3b82f6', 'GRAM'), amts: [1.51, 3.01, 7.51, 15.01, 30.02, 75.05], cur: GRAM, rate: 1.15 },
-    { id: 'nft', name: 'NFT', tag: '+10%', ico: IMG('NFT.png', '#ff7a3d', 'NFT'), amts: [5, 10, 25, 50, 100, 250], cur: USD, rate: 1.1 },
-    { id: 'xrocket', name: 'xRocket', ico: IMG('xRocket.png', '#7c5cff', 'xR'), amts: [1, 5, 10, 25, 50, 100], cur: USD, rate: 1 },
-    { id: 'cryptobot', name: 'CryptoBot', ico: IMG('Cryptobot.png', '#2fa5e8', 'CB'), amts: [1, 5, 10, 25, 50, 100], cur: USD, rate: 1 },
+    { id: 'ton', name: 'TON', ico: IMG('gram.png', '#3b82f6', 'TON'), amts: [1.51, 3.01, 7.51, 15.01, 30.02, 75.05], cur: GRAM, rate: 0 },   // rate — живой курс с сервера
+    { id: 'xrocket', name: 'xRocket', ico: IMG('xrocket.png', '#7c5cff', 'xR'), amts: [1, 5, 10, 25, 50, 100], cur: USD, rate: 1 },
+    { id: 'cryptobot', name: 'CryptoBot', ico: IMG('cryptobot.png', '#2fa5e8', 'CB'), amts: [1, 5, 10, 25, 50, 100], cur: USD, rate: 1 },
   ];
   const CHK = '<span class="tp-chk"><svg viewBox="0 0 12 12"><path d="M2 6.5l3 3 5-6"/></svg></span>';
-  let m = METHODS[0], amount = m.amts[1], timer = 0;
+  let m = METHODS[0], amount = m.amts[1], timer = 0, payBusy = false;
   const num = (v) => (Math.round(v * 100) / 100).toString();
+  const toUsd = (a) => Math.floor((a || 0) * m.rate * 100 + 1e-9) / 100;    // как на сервере: вниз до цента
 
   function paintAmount() {
     $('#tpFrom').innerHTML = m.cur + '<span>' + (amount ? num(amount) : '0') + '</span>';
-    $('#tpTo').innerHTML = '<span>' + ((amount || 0) * m.rate).toFixed(2) + '</span><b class="tp-usd">$</b>';
+    $('#tpTo').innerHTML = '<span>' + (m.rate > 0 ? toUsd(amount).toFixed(2) : '…') + '</span><b class="tp-usd">$</b>';
     $$('#tpAmts .tp-amt').forEach((b) => b.classList.toggle('on', Number(b.dataset.a) === amount && !input.value));
   }
   function render() {
     $('#tpMethods').innerHTML = METHODS.map((x) =>
-      `<button type="button" class="tp-m${x === m ? ' on' : ''}" data-id="${x.id}">${x.tag ? `<em class="tp-tag">${x.tag}</em>` : ''}${CHK}<span class="tp-mi">${x.ico}</span><strong>${x.name}</strong></button>`).join('');
+      `<button type="button" class="tp-m${x === m ? ' on' : ''}" data-id="${x.id}">${CHK}<span class="tp-mi">${x.ico}</span><strong>${x.name}</strong></button>`).join('');
     $('#tpAmts').innerHTML = m.amts.map((a) => `<button type="button" class="tp-amt" data-a="${a}">${m.cur}<span>${num(a)}</span></button>`).join('');
     $('#tpInCur').innerHTML = m.cur;
     paintAmount();
+  }
+  async function loadRate() {
+    const r = await payApi('rates');
+    if (r.ok && r.ton_usd > 0) { METHODS[0].rate = r.ton_usd; paintAmount(); }
   }
   function open() {
     clearTimeout(timer);
     input.value = ''; m = METHODS[0]; amount = m.amts[1];
     panel.style.transform = '';
-    render();
+    render(); loadRate();
     sheet.hidden = false; void sheet.offsetWidth; sheet.classList.add('open');
   }
   function close() {
@@ -2369,11 +2427,38 @@ $('#openInv').onclick = () => WXG.openInventory();
     if (v !== input.value) input.value = v;
     amount = parseFloat(v) || 0; paintAmount();
   });
-  input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); $('#tpPay').click(); } });
+  input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); payBtn.click(); } });
   $('#tpSupport').onclick = () => toast('Поддержка пока не подключена');
-  $('#tpPay').onclick = () => {
+
+  payBtn.onclick = async () => {
+    if (payBusy) return;                                       // двойной тап = один счёт
     if (!(amount > 0)) return showMessage('Введите сумму пополнения');
-    buzz('success'); toast('Пополнение скоро будет доступно'); close();
+    let ui = null;
+    if (m.id === 'ton') {
+      ui = tonUI();
+      if (!ui) return showMessage('TonConnect не загрузился. Обновите страницу.');
+      if (!ui.connected) { close(); setTimeout(() => ui.openModal(), 300); return toast('Подключите кошелёк и нажмите «Пополнить» ещё раз'); }
+    }
+    payBusy = true; payBtn.disabled = true; buzz('medium');
+    try {
+      const rid = (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(16).slice(2)).replace(/[^\w-]/g, '');
+      let r = await payApi('create', { provider: m.id, amount, request_id: rid });
+      if (!r.ok && /соединения/.test(r.error || '')) r = await payApi('create', { provider: m.id, amount, request_id: rid });  // тот же request_id → тот же счёт
+      if (!r.ok) return showMessage(r.error);
+      const inv = r.invoice;
+      if (inv.provider === 'ton') {
+        const t = inv.ton;
+        close(); payWatch(15);
+        try {
+          await ui.sendTransaction({ validUntil: Math.min(t.valid_until, Math.floor(Date.now() / 1000) + 600),
+            messages: [{ address: t.address, amount: t.amount_nano, payload: commentBoc(t.comment) }] });
+          toast('Перевод отправлен. Ждём подтверждения сети…', '', 3600);
+        } catch (e) { showMessage('Платёж отменён'); }
+      } else {
+        if (!inv.pay_url) return showMessage('Не удалось получить ссылку на оплату');
+        close(); openPayLink(inv.pay_url); payWatch(60);
+      }
+    } finally { payBusy = false; payBtn.disabled = false; }
   };
   // свайп вниз по язычку закрывает шторку
   const head = sheet.querySelector('.tp-head'); let y0 = null, dy = 0;
@@ -2457,7 +2542,7 @@ nav.addEventListener('contextmenu', (e) => e.preventDefault());
 window.addEventListener('blur', () => navFinish(null, true));
 if (window.ResizeObserver) new ResizeObserver(() => { if (!navDown) place(cur); }).observe(nav);
 addEventListener('resize', () => { if (!navDown) place(cur); });
-document.addEventListener('visibilitychange', () => { if (document.hidden) navFinish(null, true); else queueSync(200); });
+document.addEventListener('visibilitychange', () => { if (document.hidden) navFinish(null, true); else { queueSync(200); paySync(); } });
 
 /* ---- старт ---- */
 if (!tg || !tg.initData) setTimeout(() => showMessage(NO_TG), 600);
@@ -2467,7 +2552,7 @@ show(cur);
 requestAnimationFrame(() => requestAnimationFrame(() => { pill.style.transition = ''; }));                                        // открывает апгрейдер
 if (window.WXG) WXG.onPrices = () => { if (casesList.length) renderCases(false); };
 loadCases();
-bootPlayer().then(() => { if (window.WXG) WXG.refreshAlways(); });
+bootPlayer().then(() => { if (window.WXG) WXG.refreshAlways(); paySync(); });
 
 /* поле ввода в шторке не прячется под клавиатурой (iOS) */
 if (window.visualViewport) {
