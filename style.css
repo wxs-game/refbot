@@ -1191,3 +1191,21 @@ img,canvas,svg image{filter:saturate(1.3) contrast(1.06)}
 #wxsGiftDialog .wxs-sheet-grip,#wxsGiftDialog header,#wxsGiftDialog input[type="search"],#wxsGiftDialog #wxsGiftRetry{ flex:none; }
 #wxsGiftDialog #wxsGiftItem:not([hidden]),#wxsGiftDialog #wxsGiftList:not([hidden]),#wxsGiftDialog #wxsGiftEmpty:not([hidden]){ flex:1 1 auto; min-height:0; overflow-y:auto; overscroll-behavior:contain; -webkit-overflow-scrolling:touch; }
 #wxsGiftDialog #wxsGiftItem:not([hidden]){ align-content:start; padding-bottom:4px; }
+
+/* ---- апгрейдер: NFT в рамке по центру колеса, синяя тема ---- */
+.upg-center > .upg-emblem,.upg-center > .upg-center-value,.upg-center > .upg-center-coef,.upg-center > .upg-center-caption{ display:none !important; }
+.upg-center > .upg-nft{
+  position:absolute; left:50%; top:50%; right:auto; transform:translate(-50%,-50%);
+  width:35cqw; height:35cqw; border-radius:22%; box-sizing:border-box; padding:5%;
+  background:linear-gradient(180deg,#1f2230,#12141b);
+  border:2.5px solid rgba(63,155,255,.9);
+  box-shadow:0 0 18px rgba(47,140,255,.45), inset 0 0 14px rgba(47,140,255,.18);
+  display:flex; align-items:center; justify-content:center;
+}
+.upg-nft img{ width:100%; height:100%; object-fit:contain; display:block; border-radius:14%; filter:drop-shadow(0 4px 8px rgba(0,0,0,.5)); pointer-events:none; }
+.upg-stack.is-win .upg-nft{ border-color:#7fd0ff; box-shadow:0 0 28px rgba(80,180,255,.85), inset 0 0 16px rgba(80,180,255,.3); animation:upgNftWin .6s ease both; }
+.upg-stack.is-lose .upg-nft{ border-color:rgba(200,70,80,.85); box-shadow:0 0 16px rgba(210,50,60,.4), inset 0 0 12px rgba(210,50,60,.15); }
+@keyframes upgNftWin{ 0%{transform:translate(-50%,-50%) scale(1)} 40%{transform:translate(-50%,-50%) scale(1.1)} 100%{transform:translate(-50%,-50%) scale(1)} }
+.upg-stack.is-spinning .upg-nft{ box-shadow:0 0 24px rgba(47,140,255,.7), inset 0 0 14px rgba(47,140,255,.25); }
+.upg-rotor svg{ filter:drop-shadow(0 0 5px rgba(255,200,0,.55)); }
+.upg-stack.is-spinning .upg-rotor svg{ filter:drop-shadow(0 0 11px rgba(255,205,0,.95)); }

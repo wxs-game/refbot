@@ -221,16 +221,16 @@ const UPG_START = 348;       // где стрелка стоит до запус
 //   Всё вращение ≈5.9 с. Торможение каждый раз разное: от резкого (≈1.4 с, p≈1.6)
 //   до плавного «как на видео» (4.0 с, p≈2.6).
 const UPG_SPIN = {
-    windup: 9, windupT: 0.15, hold: 0.03,     // замах: градусы / секунды
-    accelT: 0.5,                              // разгон до крейсерской скорости, с
-    total: 6.6,                               // от начала замаха до остановки, с (было 5.9 — стрелка стопается дольше)
-    vRef: 1150,                               // крейсерская скорость на видео, °/с
-    stopMin: 1.9, stopMax: 5.0,               // длина торможения, с (резко ... плавно)
-    pMin: 1.9, pMax: 3.0,                     // «мягкость» хвоста торможения (больше — стрелка дольше доползает)
-    land: 0.3,                                // пауза после остановки перед результатом, с
-    tickDeg: 5, tickEvery: 5, tickGapMs: 50,  // вибрация: деление = 5°, бьём каждые 5 делений (25°), не чаще раза в 50 мс
-    step: 1 / 60,                             // шаг дискретизации кейфреймов, с
-    trail: [[0.010, .55], [0.021, .38], [0.032, .24], [0.044, .13]]   // [отставание с, прозрачность] призраков следа
+    windup: 16, windupT: 0.16, hold: 0.02,    // резкий замах назад
+    accelT: 0.38,                             // очень быстрый разгон
+    total: 11.5,                              // от замаха до полной остановки, с
+    vRef: 2700,                               // крейсерская скорость, °/с (было 1150) — бешеное вращение
+    stopMin: 4.6, stopMax: 6.4,               // ДОЛГАЯ остановка: стрелка тормозит и доползает 4.6–6.4 с
+    pMin: 2.8, pMax: 4.0,                     // хвост торможения: стрелка мучительно медленно доползает
+    land: 0.9,                                // пауза после остановки перед результатом, с
+    tickDeg: 5, tickEvery: 3, tickGapMs: 40,  // вибрация чаще
+    step: 1 / 60,
+    trail: [[0.010, .75], [0.020, .58], [0.031, .42], [0.043, .28], [0.056, .16]]   // длинный яркий след
 };
 const UPG_FONT = '"Carlito","Helvetica Neue",Arial,sans-serif';
 
@@ -258,6 +258,9 @@ function upgBet() {
 const upgSmooth = (x) => { x = Math.max(0, Math.min(1, x)); return x * x * (3 - 2 * x); };
 const upgPt = (r, deg) => { const a = deg * Math.PI / 180; return [360 + r * Math.sin(a), 360 - r * Math.cos(a)]; };
 
+const UPG_R = { disc: 285, bandIn: 224, ring: 322, hub: 196, segIn: 200, segOut: 222, tickIn: 327, tickOut: 339 };
+const UPG_BLUE = { glow: '47,140,255', stops: [[0, '#8ad6ff'], [.38, '#3f9bff'], [.7, '#1f6bff'], [1, '#1a47d6']] };
+
 /* ---------- статичные слои колеса (кэшируются по шансу) ----------
    Раньше каждый кадр перерисовывал ВСЁ: 2 полноразмерные картинки с альфой,
    ~10 текстов (с measureText в цикле) и 120 рисок. Теперь слои раздельные:
@@ -268,7 +271,7 @@ const upgPt = (r, deg) => { const a = deg * Math.PI / 180; return [360 + r * Mat
 // Колесо БЕЗ красного сектора — от шанса не зависит, строится один раз.
 function upgWheel() {
     if (upg.wheel && upg.wheel.width === upg.size) return upg.wheel;
-    const S = upg.size / 720, TAU = Math.PI * 2;
+    const S = upg.size / 720, TAU = Math.PI * 2, R = UPG_R;
     const c = document.createElement('canvas');
     c.width = c.height = upg.size;
     const x = c.getContext('2d');
@@ -276,31 +279,42 @@ function upgWheel() {
     const grad = (y1, y2, a, b) => { const g = x.createLinearGradient(0, y1, 0, y2); g.addColorStop(0, a); g.addColorStop(1, b); return g; };
     const disc = (r, a, b) => { x.beginPath(); x.arc(360, 360, r, 0, TAU); x.fillStyle = grad(360 - r, 360 + r, a, b); x.fill(); };
 
-    // мягкая тень под колесом
+    // тень под колесом
     x.save();
-    x.shadowColor = 'rgba(0,0,0,0.6)'; x.shadowBlur = 30 * S; x.shadowOffsetY = 14 * S;
-    x.fillStyle = '#000'; x.beginPath(); x.arc(360, 360, 286, 0, TAU); x.fill();
+    x.shadowColor = 'rgba(0,0,0,0.6)'; x.shadowBlur = 30 * S; x.shadowOffsetY = 12 * S;
+    x.fillStyle = '#000'; x.beginPath(); x.arc(360, 360, R.ring, 0, TAU); x.fill();
     x.restore();
 
-    // внешние риски: через 5°, каждая шестая длиннее
+    // внешние риски: через 5°, каждая шестая длиннее (как на образце — снаружи тонкого кольца)
     for (let i = 0; i < 72; i++) {
         const major = i % 6 === 0;
-        const [x1, y1] = upgPt(major ? 304 : 308, i * 5);
-        const [x2, y2] = upgPt(major ? 328 : 323, i * 5);
-        x.strokeStyle = major ? '#58585c' : '#47474b';
-        x.lineWidth = major ? 3.8 : 3;
+        const [x1, y1] = upgPt(major ? R.tickIn - 2 : R.tickIn, i * 5);
+        const [x2, y2] = upgPt(major ? R.tickOut + 1 : R.tickOut - 2, i * 5);
+        x.strokeStyle = major ? '#4a5878' : '#323c52';
+        x.lineWidth = major ? 3 : 2.2;
         x.lineCap = 'butt';
         x.beginPath(); x.moveTo(x1, y1); x.lineTo(x2, y2); x.stroke();
     }
 
-    disc(286, '#34343a', '#222226');          // ободок
-    disc(282, '#252529', '#202023');          // тёмный диск, где лежит сектор
-    x.beginPath(); x.arc(360, 360, 283.5, 0, TAU);
-    x.strokeStyle = '#151517'; x.lineWidth = 2; x.stroke();
+    // тонкое внешнее кольцо
+    x.beginPath(); x.arc(360, 360, R.ring, 0, TAU);
+    x.strokeStyle = '#232a3a'; x.lineWidth = 4; x.stroke();
 
-    disc(183, '#1c1c1f', '#18181b');          // центральный диск
-    x.beginPath(); x.arc(360, 360, 183, 0, TAU);
-    x.strokeStyle = '#303035'; x.lineWidth = 2.2; x.stroke();
+    // тёмный диск, где лежит сектор
+    disc(R.disc, '#25272e', '#1b1d22');
+
+    // сегментное кольцо с рисками между диском сектора и центром
+    x.beginPath(); x.arc(360, 360, R.segOut + 2, 0, TAU); x.fillStyle = '#101216'; x.fill();
+    x.strokeStyle = '#2a2f3c'; x.lineWidth = 2; x.lineCap = 'butt';
+    for (let i = 0; i < 60; i++) {
+        const [x1, y1] = upgPt(R.segIn, i * 6), [x2, y2] = upgPt(R.segOut, i * 6);
+        x.beginPath(); x.moveTo(x1, y1); x.lineTo(x2, y2); x.stroke();
+    }
+
+    // центральный диск (внутри — рамка с NFT)
+    disc(R.hub, '#1d1f25', '#14151a');
+    x.beginPath(); x.arc(360, 360, R.hub, 0, TAU);
+    x.strokeStyle = '#2a2f3c'; x.lineWidth = 2.2; x.stroke();
 
     return (upg.wheel = c);
 }
@@ -309,32 +323,29 @@ function upgWheel() {
 function upgSectorPath(x, chance) {
     const half = chance * 1.8, k = Math.PI / 180;
     x.beginPath();
-    x.arc(360, 360, 270, (180 - half) * k - Math.PI / 2, (180 + half) * k - Math.PI / 2);
-    x.arc(360, 360, 183, (180 + half) * k - Math.PI / 2, (180 - half) * k - Math.PI / 2, true);
+    x.arc(360, 360, UPG_R.disc, (180 - half) * k - Math.PI / 2, (180 + half) * k - Math.PI / 2);
+    x.arc(360, 360, UPG_R.bandIn, (180 + half) * k - Math.PI / 2, (180 - half) * k - Math.PI / 2, true);
     x.closePath();
 }
 
 // Красный сектор + тонкое кольцо по внутреннему краю (рисуется поверх колеса)
 function upgPaintSector(x, chance, fast, lose) {
-    const half = chance * 1.8, k = Math.PI / 180, TAU = Math.PI * 2;
+    const half = chance * 1.8, k = Math.PI / 180, R = UPG_R;
     const begin = (180 - half) * k - Math.PI / 2, end = (180 + half) * k - Math.PI / 2;
     const S = upg.size / 720;
-    const g = x.createLinearGradient(0, 246, 0, 632);
+    const Y0 = 360, Y1 = 360 + R.disc;                    // вертикальный градиент: светлый сверху → тёмно-синий внизу
+    const g = x.createLinearGradient(0, Y0, 0, Y1);
     if (lose) {
         g.addColorStop(0, '#8f8789'); g.addColorStop(.40, '#9a8184'); g.addColorStop(.62, '#a9575c');
         g.addColorStop(.82, '#b93a41'); g.addColorStop(1, '#c4252d');
-    } else {
-        g.addColorStop(0, '#ffe41f'); g.addColorStop(.40, '#ffd80d'); g.addColorStop(.60, '#ffb613');
-        g.addColorStop(.80, '#ff8520'); g.addColorStop(1, '#ff3a22');
-    }
+    } else UPG_BLUE.stops.forEach(([o, c]) => g.addColorStop(o, c));
+    const gc = lose ? '210,50,60' : UPG_BLUE.glow;
     x.save();
-    if (!fast) { x.shadowColor = lose ? 'rgba(210,50,60,.4)' : 'rgba(255,198,0,.55)'; x.shadowBlur = 24 * S; }
+    if (!fast) { x.shadowColor = `rgba(${gc},.55)`; x.shadowBlur = 24 * S; }
     else {
-        // свечение не гаснет при движении слайдера: дешёвая замена размытой тени — несколько мягких обводок
         x.save();
         upgSectorPath(x, chance);
         x.lineJoin = 'round';
-        const gc = lose ? '210,50,60' : '255,198,0';
         for (const [w, a] of [[34, .05], [24, .07], [15, .1], [8, .14], [3, .18]]) {
             x.lineWidth = w; x.strokeStyle = `rgba(${gc},${a})`; x.stroke();
         }
@@ -342,23 +353,21 @@ function upgPaintSector(x, chance, fast, lose) {
     }
     upgSectorPath(x, chance); x.fillStyle = g; x.fill();
     x.restore();
-    // тёмное гало от центрального диска
+    // тёмное гало от центрального кольца
     x.save();
     upgSectorPath(x, chance); x.clip();
-    const rg = x.createRadialGradient(360, 360, 183, 360, 360, 216);
-    rg.addColorStop(0, 'rgba(0,0,0,.8)'); rg.addColorStop(.45, 'rgba(0,0,0,.36)'); rg.addColorStop(1, 'rgba(0,0,0,0)');
+    const rg = x.createRadialGradient(360, 360, R.bandIn, 360, 360, R.bandIn + 34);
+    rg.addColorStop(0, 'rgba(0,0,0,.7)'); rg.addColorStop(.5, 'rgba(0,0,0,.28)'); rg.addColorStop(1, 'rgba(0,0,0,0)');
     x.fillStyle = rg; x.fillRect(0, 0, 720, 720);
     x.restore();
-    x.beginPath(); x.arc(360, 360, 183, 0, TAU);
-    x.strokeStyle = '#2c2c31'; x.lineWidth = 2; x.stroke();
-    // тонкое золотое кольцо на ободке
-    const rg2 = x.createLinearGradient(0, 246, 0, 632);
+    // тонкая дуга по внешнему кольцу (как на образце)
+    const rg2 = x.createLinearGradient(0, Y0, 0, 360 + R.ring);
     if (lose) { rg2.addColorStop(0, '#a29a9c'); rg2.addColorStop(.55, '#b8484e'); rg2.addColorStop(1, '#c8323a'); }
-    else { rg2.addColorStop(0, '#ffd21f'); rg2.addColorStop(.55, '#ffb21c'); rg2.addColorStop(1, '#ff8a1a'); }
+    else { rg2.addColorStop(0, '#8ad6ff'); rg2.addColorStop(.5, '#3f9bff'); rg2.addColorStop(1, '#1f5cff'); }
     x.save();
-    if (!fast) { x.shadowColor = lose ? 'rgba(200,50,58,.5)' : 'rgba(255,165,0,.6)'; x.shadowBlur = 8 * S; }
-    x.beginPath(); x.arc(360, 360, 284.5, begin, end);
-    x.strokeStyle = rg2; x.lineWidth = 3.6; x.lineCap = 'round'; x.stroke();
+    if (!fast) { x.shadowColor = `rgba(${gc},.7)`; x.shadowBlur = 9 * S; }
+    x.beginPath(); x.arc(360, 360, R.ring, begin, end);
+    x.strokeStyle = rg2; x.lineWidth = 4.6; x.lineCap = 'butt'; x.stroke();
     x.restore();
 }
 
@@ -377,21 +386,20 @@ function upgPaintLose(chance) {
 
 // Слой свечения. Центр (r < 183) вырезан, чтобы ореол не залезал на центральный диск.
 function upgPaintHot(x, S, chance) {
+    const R = UPG_R;
     x.setTransform(S, 0, 0, S, 0, 0);
     x.save();
-    x.beginPath(); x.rect(0, 0, 720, 720); x.arc(360, 360, 183, 0, Math.PI * 2, true); x.clip('evenodd');
-    x.save(); x.shadowColor = 'rgba(255,190,20,1)'; x.shadowBlur = 30 * S; x.fillStyle = '#ffc01a';
+    x.beginPath(); x.rect(0, 0, 720, 720); x.arc(360, 360, R.bandIn, 0, Math.PI * 2, true); x.clip('evenodd');
+    x.save(); x.shadowColor = 'rgba(70,170,255,1)'; x.shadowBlur = 30 * S; x.fillStyle = '#3f9bff';
     upgSectorPath(x, chance); x.fill(); x.restore();
-    const g = x.createLinearGradient(0, 246, 0, 632);
-    g.addColorStop(0, '#fff27a'); g.addColorStop(.4, '#ffe433'); g.addColorStop(.62, '#ffbd22'); g.addColorStop(.82, '#ff9028'); g.addColorStop(1, '#ff4a2a');
+    const g = x.createLinearGradient(0, 360, 0, 360 + R.disc);
+    g.addColorStop(0, '#c4ecff'); g.addColorStop(.4, '#6cbcff'); g.addColorStop(.7, '#2f86ff'); g.addColorStop(1, '#2455ee');
     upgSectorPath(x, chance); x.fillStyle = g; x.fill();
     x.restore();
-    // то же тёмное гало у центрального диска, что и на самом секторе —
-    // иначе яркая заливка «съедает» его и кольцо выглядит расширившимся к центру
     x.save();
     upgSectorPath(x, chance); x.clip();
-    const rg = x.createRadialGradient(360, 360, 183, 360, 360, 216);
-    rg.addColorStop(0, 'rgba(0,0,0,.8)'); rg.addColorStop(.45, 'rgba(0,0,0,.36)'); rg.addColorStop(1, 'rgba(0,0,0,0)');
+    const rg = x.createRadialGradient(360, 360, R.bandIn, 360, 360, R.bandIn + 34);
+    rg.addColorStop(0, 'rgba(0,0,0,.7)'); rg.addColorStop(.5, 'rgba(0,0,0,.28)'); rg.addColorStop(1, 'rgba(0,0,0,0)');
     x.fillStyle = rg; x.fillRect(0, 0, 720, 720);
     x.restore();
 }
@@ -772,7 +780,7 @@ function upgInit() {
     upg.stack = stack;
     const center = document.createElement('div');
     center.className = 'upg-center';
-    center.innerHTML = `<svg class="upg-emblem" viewBox="0 0 64 58" aria-hidden="true"><path d="M32 25 56 40V55L32 40 8 55V40Z" fill="#7f670d"/><path d="M32 0 64 20V38L32 18 0 38V20Z" fill="#ffd80d"/></svg><strong class="upg-center-value"></strong><span class="upg-center-coef"></span><small class="upg-center-caption"></small>`;
+    center.innerHTML = `<div class="upg-nft"><img src="nft.png" alt="" draggable="false" onerror="this.style.visibility='hidden'"></div><strong class="upg-center-value"></strong><span class="upg-center-coef"></span><small class="upg-center-caption"></small>`;
     stack.appendChild(center);
     upg.center = center;
     upg.centerValue = center.querySelector('.upg-center-value');
@@ -781,7 +789,8 @@ function upgInit() {
     const rotor = document.createElement('div');
     rotor.className = 'upg-rotor';
     rotor.setAttribute('aria-hidden','true');
-    const arrowSvg = (sfx) => `<svg viewBox="0 0 720 720"><defs><linearGradient id="upg-arrow-gold${sfx}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffe45a"/><stop offset=".55" stop-color="#ffcf1a"/><stop offset="1" stop-color="#ffc000"/></linearGradient></defs><g transform="translate(360 151) scale(.225) rotate(12.9) translate(-358 -570)"><path d="M130 277 262 250 362 568Z" fill="#a67c10" fill-opacity=".55"/><path d="M433 205 346 232 358 570Z" fill="#a67c10" fill-opacity=".5"/><path d="M243 68 312 277 353 226 358 572 207 257 268 283Z" fill="url(#upg-arrow-gold${sfx})"/><path d="M312 277 353 226 358 572 318 330Z" fill="#f2b300"/><path d="M244 70 276 270 358 570 320 330Z" fill="#fff6ae" fill-opacity=".85"/></g></svg>`;
+    // Стрелка как на образце: тонкий золотой дротик с гранями, остриё смотрит в центр; стоит между внешним кольцом и сектором
+    const arrowSvg = (sfx) => `<svg viewBox="0 0 720 720"><defs><linearGradient id="upg-ar-l${sfx}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff07a"/><stop offset="1" stop-color="#ffc400"/></linearGradient><linearGradient id="upg-ar-r${sfx}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffb800"/><stop offset="1" stop-color="#ff7a1a"/></linearGradient></defs><g><path d="M360 134 342 86 360 98Z" fill="url(#upg-ar-l${sfx})"/><path d="M360 134 378 86 360 98Z" fill="url(#upg-ar-r${sfx})"/><path d="M355.5 92 360 100 360 42 355.5 48Z" fill="url(#upg-ar-l${sfx})"/><path d="M364.5 92 360 100 360 42 364.5 48Z" fill="url(#upg-ar-r${sfx})"/><path d="M360 72 347 46 360 54Z" fill="#ffc400"/><path d="M360 72 373 46 360 54Z" fill="#ff8f10"/></g></svg>`;
     rotor.innerHTML = arrowSvg('');
     // призраки стрелки для следа при вращении: лежат под основной стрелкой, без тяжёлого drop-shadow
     upg.ghosts = UPG_SPIN.trail.map((_, gi) => {
