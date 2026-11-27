@@ -628,6 +628,11 @@ input,textarea{user-select:text;-webkit-user-select:text}
 .wxs-gift-card.is-static{ cursor: default; }
 .wxs-gift-card.is-selected{ border-color: rgba(242,201,25,.8); box-shadow: 0 0 0 1px rgba(242,201,25,.5), 0 0 18px rgba(242,201,25,.22), inset 0 1px 1px rgba(255,255,255,.2); }
 .wxs-gift-card.is-dim{ opacity: .5; }
+.wxs-gift-card.is-withdrawing{filter:blur(2px) saturate(.35);opacity:.65;cursor:default}
+.wxs-gift-wait{position:absolute;right:5px;left:5px;bottom:5px;padding:6px 4px;border-radius:10px;background:rgba(37,39,46,.93);color:#c3c6ce;font:700 11px/1 Roboto,Arial,sans-serif;filter:blur(0)}
+.wxs-ref-info{margin:12px 0 2px;color:#aeb3c1;text-align:center;font:14px/1.38 Roboto,Arial,sans-serif}
+.wxs-invite{width:100%;min-height:46px;border:0;border-radius:14px;background:#2f7bff;color:#fff;font:700 15px/1 Roboto,Arial,sans-serif}
+.wxs-withdraw:disabled{opacity:.5}
 .wxs-gift-img{ display: block; width: 100%; aspect-ratio: 1; border-radius: 14px; overflow: hidden;
     background: radial-gradient(circle at 50% 30%, #2b2a31, #131317 75%); }
 .wxs-gift-img img{ width: 100%; height: 100%; object-fit: cover; display: block; }
@@ -886,6 +891,7 @@ button{font-family:inherit}
 .cs-art i.p2{width:42%;left:56%;top:40%;transform:rotate(14deg);z-index:-1;opacity:.95}
 .cs-art img{width:100%;height:100%;object-fit:contain}
 .cs-emoji{position:absolute;inset:0;display:grid;place-items:center;font-style:normal;font-size:68px;filter:drop-shadow(0 10px 16px rgba(0,0,0,.5))}
+.cs-name{position:absolute;z-index:3;left:10px;right:10px;bottom:13px;text-align:center;font:700 14px/1.1 Montserrat,Arial,sans-serif;text-shadow:0 2px 8px #000}
 .cs-new{position:absolute;z-index:3;left:-34px;bottom:18px;width:130px;padding:4px 0;text-align:center;text-decoration:none;transform:rotate(45deg);background:#e0202e;font:800 11px Montserrat,Arial,sans-serif;letter-spacing:.06em}
 
 /* ===== шторка кейса ===== */
