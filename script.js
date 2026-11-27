@@ -1138,7 +1138,7 @@ function upgSyncBetInput() {
     const listed = new Map();
     let serverCatalog = new Map();     // slug → цена в центах (с сервера)
     let liveOffers = new Map();
-    let inventory = [];
+    let inventory = [], referral = null;
     let inventoryLoaded = false, inventoryRevision = 0;
     let lastErr = '', liveReady = false, liveLoad = null, loadedAt = 0, catalogAsked = false, priceReq = null, rateAsked = false;
     let anchorUntil = 0, catalogMin = null, targetSlug = null, view = 'catalog', pending = null, stakeId = null, cashCents = null, itemId = null, busy = false, stakeKey = '';
@@ -1168,7 +1168,9 @@ function upgSyncBetInput() {
     const stakeFor = (cents, chance) => Math.max(1, Math.ceil(cents * chance / 95));
     const sellCents = (g) => { const c = centsOf(g); return c == null ? null : Math.floor(c * 87 / 100); };
     const stakeItem = () => inventory.find((i) => i.id === stakeId) || null;
-    const inventoryItem = (id, slug) => ({ ...giftBy(slug), id });
+    const inventoryItem = (id, slug, meta = {}) => ({ ...giftBy(slug), id, ...meta });
+    const isReferralGift = (g) => g?.source === 'referral_case';
+    const isLockedGift = (g) => isReferralGift(g) || g?.status !== 'owned';
 
     function target() {
         if (!targetSlug) return null;
@@ -1218,7 +1220,8 @@ function upgSyncBetInput() {
                 const rate = Number(state.rate);
                 if (rate > 0.05 && rate < 50) { gramUsd = rate; rateFromServer = true; }
                 if (revision === inventoryRevision) {
-                    inventory = state.pending_gifts.map((g) => inventoryItem(g.request_id, g.gift_slug));
+                    inventory = state.pending_gifts.map((g) => inventoryItem(g.request_id, g.gift_slug, g));
+                    referral = state.referral || referral;
                     inventoryLoaded = true;
                     if (stakeId && !stakeItem()) stakeId = null;
                 }
@@ -1613,7 +1616,7 @@ function upgSyncBetInput() {
     function card(g, onPick, opts = {}) {
         const b = document.createElement('button');
         b.type = 'button';
-        b.className = 'wxs-gift-card' + (opts.selected ? ' is-selected' : '') + (opts.dim ? ' is-dim' : '');
+        b.className = 'wxs-gift-card' + (opts.selected ? ' is-selected' : '') + (opts.dim ? ' is-dim' : '') + (opts.waiting ? ' is-withdrawing' : '');
         const frame = document.createElement('span');
         frame.className = 'wxs-gift-img';
         frame.append(imageFor(g, true));
@@ -1622,7 +1625,9 @@ function upgSyncBetInput() {
         const price = document.createElement('em');
         price.textContent = money(usd(g));
         b.append(frame, name, price);
-        b.addEventListener('click', onPick);
+        if (opts.waiting) { const status = document.createElement('span'); status.className = 'wxs-gift-wait'; status.textContent = '◌  Ожидание…'; b.append(status); b.disabled = true; }
+        else if (opts.locked) { b.disabled = true; b.setAttribute('aria-label', g.name + ': недоступен для апгрейда'); }
+        else b.addEventListener('click', onPick);
         return b;
     }
 
@@ -1655,6 +1660,7 @@ function upgSyncBetInput() {
     function renderItem() {
         const item = inventory.find((i) => i.id === itemId);
         if (!item) { view = 'inventory'; return renderDialog(); }
+        const referralGift = isReferralGift(item), waiting = item.status === 'withdrawal_pending';
         const sell = sellCents(item);
         const img = document.createElement('div');
         img.className = 'wxs-item-img';
@@ -1668,12 +1674,13 @@ function upgSyncBetInput() {
         up.type = 'button';
         up.className = 'wxs-item-btn is-gold';
         up.textContent = 'Апгрейднуть';
-        up.addEventListener('click', () => setStake(item.id));
+        up.disabled = isLockedGift(item);
+        up.addEventListener('click', () => { if (!isLockedGift(item)) setStake(item.id); });
         const sl = document.createElement('button');
         sl.type = 'button';
         sl.className = 'wxs-item-btn';
         sl.textContent = 'Продать за ' + moneyC(sell);
-        sl.disabled = sell == null;
+        sl.disabled = sell == null || isLockedGift(item);
         sl.addEventListener('click', async () => {
             if (busy) return;
             const ok = await new Promise((res) => tgApp?.showConfirm
@@ -1694,7 +1701,29 @@ function upgSyncBetInput() {
             } finally { busy = false; unlockEconomy(); }
             renderDialog();
         });
-        itemBox.replaceChildren(img, name, price, up, sl);
+        const withdraw = document.createElement('button');
+        withdraw.type = 'button'; withdraw.className = 'wxs-item-btn wxs-withdraw';
+        if (waiting) { withdraw.disabled = true; withdraw.textContent = '◌  Ожидание…'; }
+        else if (!referralGift) { withdraw.disabled = true; withdraw.textContent = 'Вывести'; }
+        else {
+            const q = Number(referral?.qualified_referrals || 0), need = Number(referral?.required_referrals || 4);
+            withdraw.textContent = q >= need ? 'Вывести' : 'Вывести · ' + q + '/' + need + ' рефералов'; withdraw.disabled = q < need;
+            withdraw.addEventListener('click', async () => {
+                if (busy || withdraw.disabled) return; busy = true; withdraw.disabled = true;
+                try { const r = await rpc('gift_withdraw_request', { p_request: item.id }); if (!r.ok) return showMessage(r.error || 'Вывод пока недоступен'); await refreshLive(); view = 'inventory'; renderDialog(); }
+                catch (e) { showMessage('Не удалось создать заявку на вывод. Попробуйте позже.'); } finally { busy = false; }
+            });
+        }
+        const info = document.createElement('p'); info.className = 'wxs-ref-info';
+        if (waiting) info.textContent = 'Заявка принята. Подарок ожидает отправки и больше недоступен для продажи или ставок.';
+        else if (referralGift) {
+            const q = Number(referral?.qualified_referrals || 0), need = Number(referral?.required_referrals || 4);
+            info.textContent = 'Реферальный дроп нельзя продать или апгрейднуть. Для вывода: ' + q + '/' + need + ' подтверждённых рефералов.';
+            const invite = document.createElement('button'); invite.type = 'button'; invite.className = 'wxs-invite'; invite.textContent = 'Пригласить друзей';
+            invite.onclick = () => { const link = referral?.referral_link; if (!link) return; const share = 'https://t.me/share/url?url=' + encodeURIComponent(link) + '&text=' + encodeURIComponent('Заходи в RocketUP по моей ссылке'); if (tg?.openTelegramLink) tg.openTelegramLink(share); else navigator.clipboard?.writeText(link).then(() => toast('Ссылка скопирована')); };
+            itemBox.replaceChildren(img, name, price, up, sl, withdraw, info, invite); return;
+        } else info.textContent = 'Вывод доступен только для дропа из реферального кейса.';
+        itemBox.replaceChildren(img, name, price, up, sl, withdraw, info);
     }
 
     function renderDialog() {
@@ -1735,7 +1764,7 @@ function upgSyncBetInput() {
             }
             else if (view === 'stake') setStake(g.id);
             else { itemId = g.id; view = 'item'; renderDialog(); }
-        }, { selected: view === 'catalog' && g.slug === targetSlug, dim: view === 'catalog' && !upgradable(g.slug) })));
+        }, { selected: view === 'catalog' && g.slug === targetSlug, dim: (view === 'catalog' && !upgradable(g.slug)) || (view === 'stake' && isLockedGift(g)), locked: view === 'stake' && isLockedGift(g), waiting: g.status === 'withdrawal_pending' })));
         if (view === 'catalog' && catalogMin && Date.now() < anchorUntil && !q) {       // прокрутка к первому подарку дороже цели (вверх — дешёвые)
             const i = filtered.findIndex((g) => centsOf(g) > catalogMin);
             if (i > 0 && list.children[i]) requestAnimationFrame(() => list.children[i]?.scrollIntoView({ block: 'start' }));
@@ -1800,7 +1829,7 @@ function upgSyncBetInput() {
         listEl.replaceChildren(...items.map((g) => {
             const b = document.createElement('button');
             b.type = 'button';
-            b.className = 'wxs-gift-card' + (g.id === sheetGift ? ' is-selected' : '');
+            b.className = 'wxs-gift-card' + (g.id === sheetGift ? ' is-selected' : '') + (isLockedGift(g) ? ' is-dim' : '');
             const frame = document.createElement('span');
             frame.className = 'wxs-gift-img';
             frame.append(imageFor(g, true));
@@ -1809,7 +1838,8 @@ function upgSyncBetInput() {
             const price = document.createElement('em');
             price.textContent = money(usd(g));
             b.append(frame, name, price);
-            b.addEventListener('click', () => { window.haptic?.('select'); setStake(g.id); closeSheet(); });
+            if (isLockedGift(g)) { b.disabled = true; b.setAttribute('aria-label', g.name + ': нельзя поставить'); }
+            else b.addEventListener('click', () => { window.haptic?.('select'); setStake(g.id); closeSheet(); });
             return b;
         }));
         emptyEl.hidden = items.length > 0;
@@ -2028,6 +2058,7 @@ function caseCard(c, i) {
   if (top.length) top.forEach((it, k) => { const w = document.createElement('i'); w.className = 'p' + k; w.append(giftImg(it, true)); art.append(w); });
   else { const e = document.createElement('em'); e.className = 'cs-emoji'; e.textContent = c.emoji || '🎁'; art.append(e); }
   b.append(chip, art);
+  const title = document.createElement('strong'); title.className = 'cs-name'; title.textContent = c.name; b.append(title);
   if (c.is_new || c.new || c.badge === 'new') { const r = document.createElement('u'); r.className = 'cs-new'; r.textContent = 'NEW'; b.append(r); }
   b.setAttribute('aria-label', c.name + ', ' + chip.textContent);
   return b;
@@ -2229,6 +2260,7 @@ function openCase(c) {
   cv = { c, n: 1, busy: false, pool: normItems(c), rows: [], iw: 110, rowW: 320, dirty: false };
   if (!cv.pool.length) cv.pool = [{ slug: '', name: '', price: 0, chance: null, weight: 1 }];
   $('#cvTitle').textContent = c.name;
+  $('#cvQty').hidden = isFreeCase(c);
   const items = normItems(c);
   $('#cvGrid').replaceChildren(...items.map((it) => tile(it, true)));
   $('#cvEmpty').hidden = items.length > 0;
@@ -2292,7 +2324,7 @@ cvGo.addEventListener('click', async () => {
       balance = r.balance; got.push(r);
     }
     if (got.length) {
-      const wins = got.map((r) => ({ slug: r.gift_slug, name: r.name || (window.WXG ? WXG.giftBy(r.gift_slug).name : r.gift_slug), price: Number(r.price) || 0, id: r.item_id }));
+      const wins = got.map((r) => ({ slug: r.gift_slug, name: r.name || (window.WXG ? WXG.giftBy(r.gift_slug).name : r.gift_slug), price: Number(r.price) || 0, id: r.item_id, source: r.source || '' }));
       await runSpin(wins);
       if (balance != null) setUIBalance(balance);     // баланс обновляется только после прокрута
       await new Promise((r) => setTimeout(r, 450));
@@ -2314,7 +2346,7 @@ function showReward(wins) {
     row.append(im, nm, v);
     return row;
   }));
-  rwWins = wins.filter((w) => !isCash(w) && w.id && window.WXG);              // деньги уже на балансе — продаются только подарки
+  rwWins = wins.filter((w) => !isCash(w) && w.id && window.WXG && w.source !== 'referral_case');              // деньги уже на балансе — продаются только подарки
   rwSellTotal = rwWins.reduce((s, w) => s + WXG.sellEstimate(w.slug, w.price), 0);
   rwSell.hidden = !rwWins.length; rwSell.disabled = false; rwInvBtn.hidden = !rwWins.length;   // выпали только $ → кнопки «В инвентарь» нет
   rwUp.hidden = !(rwWins.length === 1 && window.WXG?.upgradeWith);
