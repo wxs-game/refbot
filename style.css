@@ -12,10 +12,6 @@ h2{font:800 15px Montserrat;letter-spacing:.12em;color:var(--mu);margin:0 0 12px
 .btn:disabled{opacity:.4}.btn:active{transform:scale(.98)}
 .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 /* нижняя панель */
-#nav{position:fixed;left:14px;right:14px;bottom:calc(env(safe-area-inset-bottom,0px) + 14px);height:72px;border-radius:36px;z-index:10;touch-action:none;
- -webkit-touch-callout:none;background:rgba(30,30,34,.84);backdrop-filter:blur(22px) saturate(1.5);-webkit-backdrop-filter:blur(22px) saturate(1.5);
- border:1px solid rgba(255,255,255,.12);box-shadow:0 10px 36px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.14);
- transition:transform .28s cubic-bezier(.3,1.4,.5,1)}
 #nav.hold{transform:scale(1.02)}
 .tabs{position:absolute;inset:0;display:flex;z-index:1}
 .tab{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;font:700 12.5px Roboto;color:#a9a9ae;transition:color .2s;min-width:0}
@@ -27,22 +23,14 @@ h2{font:800 15px Montserrat;letter-spacing:.12em;color:var(--mu);margin:0 0 12px
 #pill.drag{transition:width .25s ease,transform .25s ease,background .2s;transform:scale(1.06);background:linear-gradient(180deg,#7d6243,#5c4830)}
 
 /* ===== интеграция ===== */
-:root{--top:calc(env(safe-area-inset-top,0px) + 62px)}
 input,textarea{user-select:text;-webkit-user-select:text}
 .page.hidden{display:none!important}
 .page{padding-top:calc(var(--top) + 8px)}
 #upgraderPage{padding-top:calc(var(--top) + 8px)!important;padding-bottom:130px}
-#top{position:fixed;left:0;right:0;top:0;z-index:9;display:flex;align-items:center;gap:10px;
- padding:calc(env(safe-area-inset-top,0px) + 8px) 16px 8px;background:linear-gradient(var(--bg) 70%,transparent)}
 .tav,.av{border-radius:50%;background:var(--brown);display:grid;place-items:center;font:800 15px Montserrat;overflow:hidden;flex:none}
 .tav{width:38px;height:38px}
 .tav img,.av img{width:100%;height:100%;object-fit:cover;display:block}
 .tname{flex:1;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.tbal{font:800 15px Montserrat;color:var(--gold);background:#15161b;border:1px solid var(--line);padding:8px 14px;border-radius:16px}
-#toast{position:fixed;left:50%;top:calc(env(safe-area-inset-top,0px) + 64px);transform:translate(-50%,-140px);background:#1c1b18;
- border:1px solid var(--line);padding:12px 18px;border-radius:18px;font-weight:700;transition:transform .35s;z-index:2000;
- white-space:pre-line;text-align:center;max-width:calc(100vw - 32px)}
-#toast.on{transform:translate(-50%,0)}#toast.win{color:var(--gold)}#toast.lose{color:#ff6b5a}
 .card{background:var(--card);border:1px solid var(--line);border-radius:26px;padding:16px;margin-bottom:14px}
 .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .case{text-align:center;padding:14px 8px}.case .em{font-size:56px}.case b{display:block;margin:4px 0}
@@ -793,3 +781,46 @@ input,textarea{user-select:text;-webkit-user-select:text}
 #upgraderPage .wxs-stake-slot em{font-size:13px}
 
 .stk-ok[hidden]{display:none!important}
+
+/* ===== liquid glass: верхняя и нижняя панели ===== */
+:root{
+ --safe-t:calc(env(safe-area-inset-top,0px) + var(--tg-content-safe-area-inset-top,0px));
+ --top:calc(var(--safe-t) + 78px);
+}
+#top,#nav{
+ background:linear-gradient(180deg,rgba(255,255,255,.15),rgba(255,255,255,.04) 55%,rgba(255,255,255,.08)),rgba(26,26,30,.58);
+ -webkit-backdrop-filter:blur(26px) saturate(1.9) brightness(1.08);backdrop-filter:blur(26px) saturate(1.9) brightness(1.08);
+ border:1px solid rgba(255,255,255,.17);
+ box-shadow:inset 0 1px 0 rgba(255,255,255,.4),inset 0 -1px 0 rgba(255,255,255,.07),inset 0 0 22px rgba(255,255,255,.05),0 12px 32px rgba(0,0,0,.5);
+ isolation:isolate;overflow:hidden
+}
+#top::before,#nav::before{                     /* блик «стекла» */
+ content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;z-index:0;
+ background:radial-gradient(120% 140% at 12% -30%,rgba(255,255,255,.28),rgba(255,255,255,0) 52%),
+            linear-gradient(115deg,rgba(255,255,255,.07),rgba(255,255,255,0) 40%,rgba(255,255,255,.05))
+}
+#top{position:fixed;left:14px;right:14px;top:calc(var(--safe-t) + 10px);height:58px;z-index:11;border-radius:29px;
+ display:flex;align-items:center;gap:10px;padding:0 8px 0 9px}
+#top>*{position:relative;z-index:1}
+#nav{position:fixed;left:14px;right:14px;bottom:calc(env(safe-area-inset-bottom,0px) + 14px);height:72px;border-radius:36px;z-index:11;touch-action:none;
+ -webkit-touch-callout:none;transition:transform .28s cubic-bezier(.3,1.4,.5,1)}
+.tav{width:42px;height:42px;box-shadow:0 0 0 2px rgba(255,255,255,.18)}
+.tname{padding-left:2px}
+.tbal{font:800 15px Montserrat,Arial,sans-serif;color:var(--gold);padding:10px 15px;border-radius:22px;white-space:nowrap;
+ background:rgba(0,0,0,.34);border:1px solid rgba(255,255,255,.12);box-shadow:inset 0 1px 0 rgba(255,255,255,.12)}
+#pill{z-index:0}
+/* плавное затухание контента под нижней панелью */
+body::after{content:"";position:fixed;left:0;right:0;bottom:0;height:calc(env(safe-area-inset-bottom,0px) + 118px);z-index:9;pointer-events:none;
+ background:linear-gradient(180deg,rgba(7,8,12,0),rgba(7,8,12,.88) 70%)}
+.page{padding-bottom:calc(env(safe-area-inset-bottom,0px) + 128px)}
+#upgraderPage{padding-bottom:calc(env(safe-area-inset-bottom,0px) + 128px)!important}
+
+/* уведомление: полностью прячется и не залезает под шапку Telegram */
+#toast{position:fixed;left:50%;top:calc(var(--safe-t) + 78px);z-index:2000;max-width:calc(100vw - 32px);
+ padding:12px 18px;border-radius:20px;font-weight:700;text-align:center;white-space:pre-line;color:var(--tx);
+ background:rgba(30,30,34,.78);-webkit-backdrop-filter:blur(22px) saturate(1.6);backdrop-filter:blur(22px) saturate(1.6);
+ border:1px solid rgba(255,255,255,.16);box-shadow:0 12px 30px rgba(0,0,0,.5);
+ opacity:0;visibility:hidden;pointer-events:none;transform:translate(-50%,-16px) scale(.96);
+ transition:opacity .22s ease,transform .3s cubic-bezier(.3,1.3,.5,1),visibility 0s linear .3s}
+#toast.on{opacity:1;visibility:visible;transform:translate(-50%,0) scale(1);transition:opacity .22s ease,transform .3s cubic-bezier(.3,1.3,.5,1),visibility 0s}
+#toast.win{color:var(--gold)}#toast.lose{color:#ff6b5a}
