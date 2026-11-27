@@ -823,6 +823,8 @@ body::after{content:"";position:fixed;left:0;right:0;bottom:0;height:calc(env(sa
  transition:opacity .22s ease,transform .3s cubic-bezier(.3,1.3,.5,1),visibility 0s linear .3s}
 #toast.on{opacity:1;visibility:visible;transform:translate(-50%,0) scale(1);transition:opacity .22s ease,transform .3s cubic-bezier(.3,1.3,.5,1),visibility 0s}
 #toast.win{color:var(--gold)}#toast.lose{color:#ff6b5a}
+#toast.deposit{min-width:230px;padding:15px 20px;border-color:rgba(54,220,132,.45);color:#67f0a3;
+ background:rgba(13,45,31,.9);box-shadow:0 14px 34px rgba(0,0,0,.55),0 0 22px rgba(45,219,124,.18);}
 
 /* ===== нижняя панель: без дерганья и перекрытий при перетаскивании ===== */
 #nav.hold{transform:none}
