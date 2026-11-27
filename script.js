@@ -2353,7 +2353,8 @@ $('#openInv').onclick = () => WXG.openInventory();
 /* ---- пополнение: xRocket / CryptoBot / TON (TonConnect). Деньги считает ТОЛЬКО сервер ---- */
 const PAY_URL = SUPABASE_URL + '/functions/v1/payments';
 const APP_URL = 'https://wxs-game.github.io/refbot';
-const TONCONNECT_MANIFEST_URL = APP_URL + '/tonconnect-manifest.json';
+// Новый URL намеренно сбрасывает кэш старого манифеста («Refbot») в TonConnect.
+const TONCONNECT_MANIFEST_URL = APP_URL + '/tonconnect-manifest.json?v=rocketup-20261127-3';
 async function payApi(action, args) {
   if (!(tg && tg.initData)) return { ok: false, error: NO_TG };
   try {
@@ -2407,6 +2408,12 @@ function tonUI() {
     const root = document.createElement('div'); root.id = 'tc-widget-root'; document.body.append(root);
   }
   tcui = new TON_CONNECT_UI.TonConnectUI({ manifestUrl: TONCONNECT_MANIFEST_URL, widgetRootId: 'tc-widget-root' });
+  tcui.onStatusChange((wallet) => {
+    if (wallet) {
+      try { localStorage.setItem('rocketup_ton_connected', '1'); } catch (_) {}
+      toast('Кошелёк подключён', 'win', 2400);
+    }
+  });
   return tcui;
 }
 async function restoreTonConnection(ui) {
