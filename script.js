@@ -2028,9 +2028,10 @@ function closeSheet(d) {
   d.addEventListener('animationend', (e) => { if (e.target === d) fin(); });
   setTimeout(fin, 340);
 }
-/* ---- свайп вниз закрывает любую шторку: за язычок, шапку и за контент (если он прокручен к началу) ---- */
-function enableSwipeClose(d) {
-  let y0 = 0, dy = 0, t0 = 0, drag = false, sc = null;
+/* ---- свайп вниз закрывает шторку: палец ведёт её 1:1, отпускание — по скорости и расстоянию.
+        handleOnly: тянуть можно только за язычок сверху (экран кейса), контент просто скроллится ---- */
+function enableSwipeClose(d, handleOnly) {
+  let y0 = 0, lastY = 0, dy = 0, drag = false, armed = false, sc = null, raf = 0, hist = [];
   const scrollerOf = (el) => {
     for (; el && el !== d.parentElement; el = el.parentElement) {
       if (el.scrollHeight > el.clientHeight + 1 && /(auto|scroll)/.test(getComputedStyle(el).overflowY)) return el;
@@ -2038,42 +2039,60 @@ function enableSwipeClose(d) {
     }
     return null;
   };
+  const paint = () => { raf = 0; d.style.transform = 'translate3d(0,' + dy + 'px,0)'; };
+  const reset = () => { d.style.transition = ''; d.style.transform = ''; d.style.willChange = ''; d.classList.remove('swiped'); };
   d.addEventListener('touchstart', (e) => {
-    if (e.touches.length !== 1 || d.classList.contains('closing') || d.classList.contains('swiped')) { drag = false; return; }
-    y0 = e.touches[0].clientY; dy = 0; t0 = performance.now(); drag = false; sc = scrollerOf(e.target);
+    armed = false; drag = false;
+    if (e.touches.length !== 1 || d.classList.contains('closing') || d.classList.contains('swiped')) return;
+    if (handleOnly && (!e.target.closest || !e.target.closest('.wxs-sheet-grip'))) return;
+    if (d.id === 'caseView' && cv.busy) return;
+    armed = true; y0 = lastY = e.touches[0].clientY; dy = 0;
+    hist = [{ y: y0, t: performance.now() }];
+    sc = handleOnly ? null : scrollerOf(e.target);
     d.style.transition = '';
   }, { passive: true });
   d.addEventListener('touchmove', (e) => {
-    if (e.touches.length !== 1 || d.classList.contains('swiped')) return;
-    const dd = e.touches[0].clientY - y0;
+    if (!armed || e.touches.length !== 1) return;
+    const y = e.touches[0].clientY, now = performance.now();
     if (!drag) {
-      if (dd < 6 || (sc && sc.scrollTop > 0)) return;           // тянем только вниз и только когда список наверху
-      drag = true; d.style.transition = 'none';
+      const dd = y - y0;
+      if (handleOnly ? Math.abs(dd) < 3 : (dd < 8 || (sc && sc.scrollTop > 0))) return;
+      drag = true; y0 = y;                                   // старт без скачка: отсчёт от текущей точки
+      d.style.transition = 'none'; d.style.willChange = 'transform';
     }
-    dy = Math.max(0, dd - 6);
-    d.style.transform = 'translate3d(0,' + dy + 'px,0)';
+    lastY = y; dy = Math.max(0, y - y0);
+    hist.push({ y, t: now }); while (hist.length > 2 && now - hist[0].t > 120) hist.shift();
+    if (!raf) raf = requestAnimationFrame(paint);
     if (e.cancelable) e.preventDefault();
   }, { passive: false });
   const end = () => {
+    if (!armed) return;
+    armed = false;
     if (!drag) return;
     drag = false;
-    const v = dy / Math.max(1, performance.now() - t0);
-    if (dy > 110 || (v > 0.5 && dy > 30)) {
+    if (raf) { cancelAnimationFrame(raf); raf = 0; }
+    d.style.transform = 'translate3d(0,' + dy + 'px,0)';
+    const now = performance.now(), o = hist[0] || { y: lastY, t: now - 16 };
+    const v = (lastY - o.y) / Math.max(16, now - o.t);       // px/мс
+    const h = d.getBoundingClientRect().height || 600;
+    void d.offsetHeight;
+    if (dy > h * 0.3 || (v > 0.5 && dy > 20)) {
       d.classList.add('swiped');
-      d.style.transition = 'transform .22s cubic-bezier(.4,0,1,1)';
-      d.style.transform = 'translate3d(0,110%,0)';
-      setTimeout(() => { if (d.open) d.close(); d.style.transition = ''; d.style.transform = ''; d.classList.remove('swiped'); }, 230);
+      const dur = Math.max(0.16, Math.min(0.34, (h - dy) / Math.max(v, 1.0) / 1000));
+      d.style.transition = 'transform ' + dur.toFixed(2) + 's cubic-bezier(.25,.7,.35,1)';
+      d.style.transform = 'translate3d(0,100%,0)';
       buzz('light');
+      setTimeout(() => { if (d.open) d.close(); reset(); }, dur * 1000 + 40);
     } else {
-      d.style.transition = 'transform .22s cubic-bezier(.2,.9,.25,1)';
-      d.style.transform = '';
-      setTimeout(() => { d.style.transition = ''; }, 240);
+      d.style.transition = 'transform .32s cubic-bezier(.22,.9,.3,1)';
+      d.style.transform = 'translate3d(0,0,0)';
+      setTimeout(reset, 340);
     }
   };
   d.addEventListener('touchend', end);
   d.addEventListener('touchcancel', end);
 }
-$$('dialog.wxs-sheet').forEach(enableSwipeClose);
+$$('dialog.wxs-sheet').forEach((d) => enableSwipeClose(d, d.id === 'caseView'));
 const outside = (d, e) => { const r = d.getBoundingClientRect(); return e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom; };
 
 /* ---- конфетти ---- */
