@@ -90,6 +90,7 @@ async function publicRpc(fn, args) {            // функции без авт�
 
 /* ---------- 3. состояние игрока ---------- */
 let currentBalance = 0, currentTurnover = 0, currentMaxWin = 0, currentTotalWin = 0;
+let shownBalance = 0, balanceAnimation = 0;
 let currentBetsCount = 0, currentWinsCount = 0, currentDeposits = 0, currentWithdrawals = 0;
 let playerReady = false, playerData = null;
 const MIN_BET = 0.10;
@@ -98,9 +99,24 @@ function roundMoney(v) { const n = Number(v); return isFinite(n) ? Math.round((n
 const fmt = (n) => Number(n || 0).toFixed(2) + ' $';
 
 function setUIBalance(v) {
-  currentBalance = parseFloat(v) || 0;
-  const t = fmt(currentBalance);
-  ['#tBal', '#bal'].forEach((s) => { const e = $(s); if (e) e.textContent = t; });
+  const next = parseFloat(v) || 0;
+  currentBalance = next;
+  cancelAnimationFrame(balanceAnimation);
+  const from = shownBalance;
+  const started = performance.now();
+  const duration = Math.min(750, Math.max(260, Math.abs(next - from) * 110));
+  const paint = (value) => {
+    const t = fmt(value);
+    ['#tBal', '#bal'].forEach((s) => { const e = $(s); if (e) e.textContent = t; });
+  };
+  const step = (now) => {
+    const progress = Math.min(1, (now - started) / duration);
+    shownBalance = from + (next - from) * (1 - Math.pow(1 - progress, 3));
+    paint(shownBalance);
+    if (progress < 1) balanceAnimation = requestAnimationFrame(step);
+    else { shownBalance = next; paint(next); }
+  };
+  balanceAnimation = requestAnimationFrame(step);
   const set = (id, val) => { const e = document.getElementById(id); if (e) e.textContent = val; };
   set('stTurn', fmt(currentTurnover)); set('stBets', currentBetsCount);
   set('stWins', currentWinsCount); set('stMax', 'x' + currentMaxWin.toFixed(2));
@@ -2354,9 +2370,16 @@ let payWatchTimer = 0, payWatchUntil = 0;
 async function paySync() {                                     // сервер сам перепроверяет провайдеров/блокчейн и зачисляет ровно один раз
   const r = await payApi('sync');
   if (!r.ok) return r;
+  // Это баланс, который вернул сервер уже после проверки оплаты.
+  // Обновляем сразу, не дожидаясь следующей загрузки профиля.
+  if (Number.isFinite(Number(r.balance_cents))) setUIBalance(Number(r.balance_cents) / 100);
   let fresh = 0;
   for (const c of r.credited || []) if (!seenDep.has(c.id)) { seenDep.add(c.id); fresh += c.usd; }
-  if (fresh > 0) { buzz('success'); toast('Баланс пополнен на +' + fresh.toFixed(2) + ' $', 'win', 3600); queueSync(0); }
+  if (fresh > 0) {
+    buzz('success');
+    toast('✓ ПОПОЛНЕНИЕ ЗАЧИСЛЕНО\n+' + fresh.toFixed(2) + ' $', 'win deposit', 4200);
+    queueSync(0);
+  }
   return r;
 }
 function payWatch(minutes) {
