@@ -1910,7 +1910,25 @@ function normItems(c) {                      // состав берём с се�
   a.forEach((x) => { if (x.chance == null && sw > 0) x.chance = x.weight / sw * 100; });
   return a.sort((p, q) => q.price - p.price);
 }
-const giftImg = (it, lazy) => {                // оригинальный подарок: без фона, не улучшенный
+const isCash = (it) => /^cash/.test((it && it.slug) || '');
+/* денежный дроп: money.tgs (gzip-Lottie) из корня; файл читаем один раз и кэшируем */
+let moneyData = null;
+function loadMoney() {
+  return moneyData || (moneyData = fetch('money.tgs').then((r) => { if (!r.ok) throw 0; return new Response(r.body.pipeThrough(new DecompressionStream('gzip'))).json(); }));
+}
+function cashAnim(play) {
+  const box = document.createElement('span');
+  box.style.cssText = 'display:block;width:100%;height:100%';
+  const fail = () => { box.textContent = '💵'; box.style.cssText += ';display:grid;place-items:center;font-size:30px'; };
+  if (!window.lottie || !window.DecompressionStream) { fail(); return box; }
+  loadMoney().then((data) => {
+    const a = lottie.loadAnimation({ container: box, renderer: 'svg', loop: !!play, autoplay: !!play && !REDUCED, animationData: JSON.parse(JSON.stringify(data)) });
+    if (!play || REDUCED) a.addEventListener('DOMLoaded', () => a.goToAndStop(Math.floor(a.totalFrames / 2), true));
+  }).catch(fail);
+  return box;
+}
+const giftImg = (it, lazy, play) => {                // оригинальный подарок: без фона, не улучшенный
+  if (isCash(it)) return cashAnim(play);                                                                              // денежный дроп → money.tgs
   const img = document.createElement('img');
   img.alt = ''; img.loading = lazy ? 'lazy' : 'eager'; img.decoding = 'async';
   img.style.opacity = '0'; img.style.transition = 'opacity .3s ease';
@@ -1929,7 +1947,7 @@ function caseCard(c, i) {
   const chip = document.createElement('span'); chip.className = 'cs-chip';
   chip.textContent = isFreeCase(c) ? 'Бесплатно' : csMoney(c.cost);
   const art = document.createElement('span'); art.className = 'cs-art';
-  const top = normItems(c).slice(0, 3);
+  const top = normItems(c).filter((x) => !isCash(x)).slice(0, 3);   // на обложке только подарки
   if (top.length) top.forEach((it, k) => { const w = document.createElement('i'); w.className = 'p' + k; w.append(giftImg(it, true)); art.append(w); });
   else { const e = document.createElement('em'); e.className = 'cs-emoji'; e.textContent = c.emoji || '🎁'; art.append(e); }
   b.append(chip, art);
@@ -2140,7 +2158,7 @@ const rwDlg = $('#reward');
 function showReward(wins) {
   $('#rwList').replaceChildren(...wins.map((w, i) => {
     const row = document.createElement('div'); row.className = 'rwd-row'; row.style.setProperty('--i', i);
-    const im = document.createElement('span'); im.className = 'rwd-img'; im.append(giftImg(w, false));
+    const im = document.createElement('span'); im.className = 'rwd-img'; im.append(giftImg(w, false, true));
     const nm = document.createElement('b'); nm.className = 'rwd-nm'; nm.textContent = w.name || '';
     const v = document.createElement('i'); v.className = 'rwd-pr'; v.textContent = csMoney(w.price);
     row.append(im, nm, v);
