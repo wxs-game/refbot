@@ -2396,6 +2396,8 @@ function openPayLink(url) {
   const GRAM = IMG('gram.png', '#3b82f6', 'TON');
   const USD = '<b class="tp-usd">$</b>';
   const AMOUNTS = [0.5, 1, 2, 5, 10, 25];
+  const minAmount = (provider) => provider === 'ton' ? 0.1 : 0.05;
+  const minLabel = (provider) => provider === 'ton' ? '0.1 TON' : '0.05 $';
   const METHODS = [
     { id: 'ton', name: 'TON', ico: IMG('gram.png', '#3b82f6', 'TON'), amts: AMOUNTS, cur: GRAM, rate: 0 },   // rate — живой курс с сервера
     { id: 'xrocket', name: 'xRocket', ico: IMG('xrocket.png', '#7c5cff', 'xR'), amts: AMOUNTS, cur: USD, rate: 1 },
@@ -2416,6 +2418,7 @@ function openPayLink(url) {
       `<button type="button" class="tp-m${x === m ? ' on' : ''}" data-id="${x.id}">${CHK}<span class="tp-mi">${x.ico}</span><strong>${x.name}</strong></button>`).join('');
     $('#tpAmts').innerHTML = m.amts.map((a) => `<button type="button" class="tp-amt" data-a="${a}">${m.cur}<span>${num(a)}</span></button>`).join('');
     $('#tpInCur').innerHTML = m.cur;
+    input.placeholder = 'Минимум ' + minLabel(m.id);
     paintAmount();
   }
   async function loadRate() {
@@ -2458,7 +2461,7 @@ function openPayLink(url) {
 
   payBtn.onclick = async () => {
     if (payBusy) return;                                       // двойной тап = один счёт
-    if (!(amount > 0)) return showMessage('Введите сумму пополнения');
+    if (!(amount >= minAmount(m.id))) return showMessage('Минимальная сумма — ' + minLabel(m.id));
     let ui = null;
     if (m.id === 'ton') {
       ui = tonUI();
