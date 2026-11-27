@@ -37,9 +37,14 @@ const buzz = (t) => window.haptic(t);
 
 function toast(text, cls, ms) {
   const e = $('#toast');
-  e.textContent = text; e.className = 'on ' + (cls || '');
-  clearTimeout(toast.t);
-  toast.t = setTimeout(() => { e.className = ''; }, ms || 2600);
+  e.textContent = text;
+  try { if (e.showPopover && !e.matches(':popover-open')) e.showPopover(); } catch (_) {}   // поверх модальных окон
+  e.className = ''; void e.offsetWidth; e.className = 'on ' + (cls || '');
+  clearTimeout(toast.t); clearTimeout(toast.h);
+  toast.t = setTimeout(() => {
+    e.className = '';
+    toast.h = setTimeout(() => { try { e.hidePopover && e.hidePopover(); } catch (_) {} }, 320);
+  }, ms || 2600);
 }
 function showMessage(text) { toast(String(text), 'lose', 4200); }
 window.showWinPopup = (amount, mult) =>
@@ -1275,6 +1280,8 @@ function upgSyncBetInput() {
         img.alt = '';
         img.loading = lazy ? 'lazy' : 'eager';
         img.decoding = 'async';
+        img.style.opacity = '0'; img.style.transition = 'opacity .3s ease';
+        img.addEventListener('load', () => { img.style.opacity = '1'; });
         img.addEventListener('error', () => {
             img.addEventListener('error', () => {
                 const f = document.createElement('span');
@@ -1778,6 +1785,7 @@ function upgSyncBetInput() {
     G.openSheet = openSheet;
 
     stkTabs.forEach((b) => b.addEventListener('click', () => { sheetTab = b.dataset.stkTab; window.haptic?.('select'); renderSheet(); }));
+    stkAmount.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); $('stkOk').click(); } });
     stkAmount.addEventListener('input', () => {
         let v = stkAmount.value.replace(',', '.').replace(/[^\d.]/g, '');
         const i = v.indexOf('.');
@@ -1884,15 +1892,16 @@ function paintProfile(p) {
 })();
 
 /* ---- кейсы ---- */
+const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 let casesList = [];
 async function loadCases() {
   const list = await publicRpc('list_cases');
   if (Array.isArray(list) && list.length) casesList = list;
   const box = $('#cases');
-  if (!casesList.length) { box.innerHTML = '<div class="empty">Не удалось загрузить кейсы. Потяните вкладку ещё раз.</div>'; return; }
+  if (!casesList.length) { box.innerHTML = '<div class="empty">Не удалось загрузить кейсы. Переключите вкладку, чтобы повторить.</div>'; return; }
   box.innerHTML = casesList.map((c) =>
-    `<div class="card case"><div class="em">${c.emoji}</div><b>${c.name}</b><i class="price">${fmt(c.cost)}</i>` +
-    `<button class="btn" data-c="${c.id}">Открыть</button></div>`).join('');
+    `<div class="card case"><div class="em">${esc(c.emoji)}</div><b>${esc(c.name)}</b><i class="price">${fmt(c.cost)}</i>` +
+    `<button class="btn" data-c="${esc(c.id)}">Открыть</button></div>`).join('');
 }
 $('#cases').addEventListener('click', async (e) => {
   const b = e.target.closest('[data-c]');
@@ -2008,7 +2017,15 @@ document.addEventListener('visibilitychange', () => { if (document.hidden) navFi
 
 /* ---- старт ---- */
 if (!tg || !tg.initData) setTimeout(() => showMessage(NO_TG), 600);
+pill.style.transition = 'none';          // первый показ без «выезда» пилюли из угла
 place(cur);
-show(cur);                                        // открывает апгрейдер
+show(cur);
+requestAnimationFrame(() => requestAnimationFrame(() => { pill.style.transition = ''; }));                                        // открывает апгрейдер
 loadCases();
 bootPlayer().then(() => { if (window.WXG) WXG.refreshAlways(); });
+
+/* поле ввода в шторке не прячется под клавиатурой (iOS) */
+if (window.visualViewport) {
+  const kb = () => { const v = visualViewport; document.documentElement.style.setProperty('--kb', Math.max(0, innerHeight - v.height - v.offsetTop) + 'px'); };
+  visualViewport.addEventListener('resize', kb); visualViewport.addEventListener('scroll', kb);
+}
