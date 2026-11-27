@@ -114,6 +114,19 @@
         </div>
     </div>
 
+ <dialog id="caseView" class="wxs-sheet cv" aria-labelledby="cvTitle">
+  <div class="wxs-sheet-grip" aria-hidden="true"></div>
+  <header><div class="wxs-sheet-title"><h2 id="cvTitle"></h2></div><button type="button" id="cvClose" aria-label="Закрыть">×</button></header>
+  <div class="cv-stripwrap"><div id="cvStrip" class="cv-strip"></div><i class="cv-mk t"></i><i class="cv-mk b"></i></div>
+  <div id="cvQty" class="cv-qty" role="group" aria-label="Сколько кейсов открыть">
+   <button type="button" data-n="1">1</button><button type="button" data-n="2">2</button><button type="button" data-n="3">3</button>
+  </div>
+  <h3 class="cv-h">Наличие</h3>
+  <div id="cvGrid" class="cv-grid"></div>
+  <p id="cvEmpty" class="cv-empty" hidden>Состав кейса пока недоступен.</p>
+  <div class="cv-bar"><button type="button" id="cvGo" class="mines-main-btn"></button></div>
+ </dialog>
+
  <nav id="nav">
   <div id="pill"></div>
   <div class="tabs">

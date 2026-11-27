@@ -864,3 +864,28 @@ button{font-family:inherit}
 .pinfo{overflow-wrap:anywhere}
 #toast{right:auto;bottom:auto;margin:0;height:auto;overflow:visible;width:max-content;max-width:calc(100vw - 32px)}
 @media (prefers-reduced-motion:reduce){.reward[open],.wxs-sheet::backdrop,.reward::backdrop,.page.on{animation:none}}
+
+/* ===== экран кейса ===== */
+.cv{max-height:92dvh;padding-bottom:0}
+.cv-stripwrap{position:relative;margin:0 -14px 14px}
+.cv-strip{display:flex;gap:10px;overflow-x:auto;padding:6px 14px;scrollbar-width:none;scroll-snap-type:x proximity}
+.cv-strip::-webkit-scrollbar{display:none}
+.cv-strip .cv-it{flex:none;width:34vw;max-width:150px;scroll-snap-align:center}
+.cv-mk{position:absolute;left:50%;width:0;height:0;margin-left:-11px;border-left:11px solid transparent;border-right:11px solid transparent;pointer-events:none}
+.cv-mk.t{top:0;border-top:14px solid var(--gold)}.cv-mk.b{bottom:0;border-bottom:14px solid var(--gold)}
+.cv-qty{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;padding:4px;border-radius:20px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08)}
+.cv-qty button{border:0;border-radius:16px;padding:14px 0;font:800 18px Montserrat,Arial,sans-serif;color:#9a98a1;background:none;transition:background .2s,color .2s}
+.cv-qty button[aria-pressed="true"]{color:#1a1100;background:linear-gradient(90deg,#ffc61a,#ff9a1c)}
+.cv-h{margin:20px 2px 10px;font:800 13px Montserrat,Arial,sans-serif;letter-spacing:.12em;text-transform:uppercase;color:var(--mu)}
+.cv-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.cv-it{position:relative;display:grid;gap:4px;justify-items:center;padding:10px 6px 8px;border-radius:20px;background:#1d1e24;border:1px solid rgba(255,255,255,.06)}
+.cv-p{justify-self:start;padding:4px 9px;border-radius:999px;background:rgba(0,0,0,.35);font:800 12px Montserrat,Arial,sans-serif;color:var(--gold)}
+.cv-im{display:grid;place-items:center;width:100%;aspect-ratio:1}
+.cv-im img{width:80%;height:80%;object-fit:contain}
+.cv-it small{min-height:14px;font-size:11px;font-weight:700;color:var(--mu)}
+.cv-empty{text-align:center;color:var(--mu);padding:24px 0}
+.cv-bar{position:sticky;bottom:0;margin:16px -14px 0;padding:12px 14px calc(env(safe-area-inset-bottom,0px) + 14px);background:linear-gradient(180deg,rgba(12,12,15,0),#0c0c0f 35%)}
+.cv-bar .mines-main-btn{display:block;width:100%;min-height:56px;font-size:17px}
+.cv-bar .mines-main-btn:disabled{opacity:.6}
+.rw-art.multi{width:auto;height:auto;background:none;display:grid;grid-template-columns:repeat(3,84px);gap:8px;border-radius:0;overflow:visible}
+.rw-art.multi span{width:84px;height:84px;border-radius:18px;overflow:hidden;background:#15161b}

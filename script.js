@@ -1903,30 +1903,83 @@ async function loadCases() {
     `<div class="card case"><div class="em">${esc(c.emoji)}</div><b>${esc(c.name)}</b><i class="price">${fmt(c.cost)}</i>` +
     `<button class="btn" data-c="${esc(c.id)}">Открыть</button></div>`).join('');
 }
-$('#cases').addEventListener('click', async (e) => {
-  const b = e.target.closest('[data-c]');
-  if (!b || b.disabled) return;
-  const c = casesList.find((x) => x.id === b.dataset.c);
-  if (!c) return;
-  if (!lockEconomy()) return toast('Подождите, идёт другая операция');
-  b.disabled = true; buzz('medium');
-  try {
-    const r = await crashRpc('case_open', { p_case: c.id, p_request: crypto.randomUUID() });
-    if (!r.ok) return showMessage(r.error);
-    setUIBalance(r.balance);
-    showReward(r);
-    if (window.WXG) WXG.refreshAlways();
-  } finally { b.disabled = false; unlockEconomy(); }
+/* ---- экран кейса: состав, 1/2/3, открытие за $ ---- */
+const cvDlg = $('#caseView');
+let cv = { c: null, n: 1 };
+function normItems(c) {                      // состав берём с сервера (поля читаем с запасом по именам)
+  const raw = c.items || c.gifts || c.contents || c.drops || [];
+  const a = raw.map((it) => ({
+    slug: it.gift_slug || it.slug || '', name: it.name || it.gift_slug || it.slug || '',
+    price: it.price_cents != null ? it.price_cents / 100 : Number(it.price) || 0,
+    chance: it.chance != null ? Number(it.chance) : null, weight: Number(it.weight) || 0
+  }));
+  const sw = a.reduce((s, x) => s + x.weight, 0);
+  a.forEach((x) => { if (x.chance == null && sw > 0) x.chance = x.weight / sw * 100; });
+  return a.sort((p, q) => q.price - p.price);
+}
+function giftTile(it) {
+  const b = document.createElement('div'); b.className = 'cv-it';
+  const p = document.createElement('span'); p.className = 'cv-p'; p.textContent = it.price ? it.price.toFixed(2) + ' $' : '';
+  const im = document.createElement('span'); im.className = 'cv-im';
+  im.append(WXG.imageFor({ slug: it.slug, name: it.name }, true));
+  const ch = document.createElement('small');
+  ch.textContent = it.chance != null ? (+it.chance.toFixed(it.chance < 1 ? 2 : 1)) + '%' : '';
+  b.append(p, im, ch); return b;
+}
+function renderCaseView() {
+  const c = cv.c, items = normItems(c);
+  $('#cvTitle').textContent = c.name;
+  $('#cvStrip').replaceChildren(...items.map(giftTile));
+  $('#cvGrid').replaceChildren(...items.map(giftTile));
+  $('#cvEmpty').hidden = items.length > 0;
+  $$('#cvQty button').forEach((b) => b.setAttribute('aria-pressed', String(+b.dataset.n === cv.n)));
+  $('#cvGo').textContent = 'Открыть за ' + fmt(c.cost * cv.n);
+}
+$('#cases').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-c]'); if (!b) return;
+  const c = casesList.find((x) => x.id === b.dataset.c); if (!c) return;
+  cv = { c, n: 1 }; renderCaseView(); buzz('light');
+  if (!cvDlg.open) cvDlg.showModal();
+  $('#cvStrip').scrollLeft = 0;
 });
-function showReward(r) {
-  const g = WXG.giftBy(r.gift_slug);
-  const art = $('#rwArt'); art.replaceChildren(WXG.imageFor({ slug: r.gift_slug, name: r.name }, false));
-  $('#rwName').textContent = r.name || g.name; $('#rwPrice').textContent = fmt(r.price);
+$('#cvQty').addEventListener('click', (e) => {
+  const b = e.target.closest('button'); if (!b) return;
+  cv.n = +b.dataset.n; buzz('select'); renderCaseView();
+});
+$('#cvClose').onclick = () => cvDlg.close();
+cvDlg.addEventListener('click', (e) => { if (e.target === cvDlg) cvDlg.close(); });
+$('#cvGo').addEventListener('click', async () => {
+  const c = cv.c, n = cv.n, go = $('#cvGo');
+  if (c.cost * n > currentBalance + 1e-9) return showMessage('Недостаточно средств для открытия кейса.');
+  if (!lockEconomy()) return toast('Подождите, идёт другая операция');
+  go.disabled = true; buzz('medium');
+  const strip = $('#cvStrip');
+  strip.scrollTo({ left: Math.random() * strip.scrollWidth, behavior: 'smooth' });
+  const got = [];
+  try {
+    for (let i = 0; i < n; i++) {             // каждый кейс — отдельный идемпотентный запрос
+      const r = await crashRpc('case_open', { p_case: c.id, p_request: crypto.randomUUID() });
+      if (!r.ok) { showMessage(r.error); break; }
+      setUIBalance(r.balance); got.push(r);
+    }
+  } finally { go.disabled = false; unlockEconomy(); }
+  if (got.length) { showReward(got); if (window.WXG) WXG.refreshAlways(); }
+});
+function showReward(list) {
+  const rs = [].concat(list), art = $('#rwArt');
+  art.classList.toggle('multi', rs.length > 1);
+  art.replaceChildren(...rs.map((r) => {
+    const img = WXG.imageFor({ slug: r.gift_slug, name: r.name }, false);
+    if (rs.length < 2) return img;
+    const s = document.createElement('span'); s.append(img); return s;
+  }));
+  $('#rwName').textContent = rs.length > 1 ? 'Выпало: ' + rs.length : (rs[0].name || WXG.giftBy(rs[0].gift_slug).name);
+  $('#rwPrice').textContent = fmt(rs.reduce((s, r) => s + (Number(r.price) || 0), 0));
   const d = $('#reward'); if (!d.open) d.showModal();
   buzz('heavy');
 }
 $('#rwClose').onclick = () => $('#reward').close();
-$('#rwInv').onclick = () => { $('#reward').close(); WXG.openInventory(); };
+$('#rwInv').onclick = () => { $('#reward').close(); cvDlg.close(); WXG.openInventory(); };
 $('#reward').addEventListener('click', (e) => { if (e.target.id === 'reward') e.target.close(); });
 
 /* ---- профиль ---- */
