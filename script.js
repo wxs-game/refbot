@@ -1281,6 +1281,16 @@ function upgSyncBetInput() {
     }
 
     // ---------- картинки ----------
+    function giftImageSources(g) {
+        // API принимает и название коллекции, и slug. Название ставим первым:
+        // так новые подарки отображаются сразу, даже если их slug ещё отличается.
+        const sources = [g?.name, g?.slug]
+            .map((value) => String(value || '').trim())
+            .filter(Boolean)
+            .map((value) => 'https://api.changes.tg/original/' + encodeURIComponent(value) + '.png?size=256');
+        return [...new Set(sources)];
+    }
+
     function imageFor(g, lazy) {          // обычный (не улучшенный) подарок, без фона
         const img = document.createElement('img');
         img.alt = '';
@@ -1288,13 +1298,17 @@ function upgSyncBetInput() {
         img.decoding = 'async';
         img.style.opacity = '0'; img.style.transition = 'opacity .3s ease';
         img.addEventListener('load', () => { img.style.opacity = '1'; });
+        const sources = giftImageSources(g);
+        let sourceIndex = 0;
         img.addEventListener('error', () => {
+            sourceIndex += 1;
+            if (sources[sourceIndex]) { img.src = sources[sourceIndex]; return; }
             const f = document.createElement('span');
             f.className = 'wxs-gift-fallback';
             f.textContent = '🎁';
             img.replaceWith(f);
-        }, { once: true });
-        img.src = 'https://api.changes.tg/original/' + encodeURIComponent(g.slug) + '.png?size=256';
+        });
+        img.src = sources[0] || '';
         return img;
     }
 
@@ -1963,14 +1977,25 @@ function cashAnim(play) {
   }).catch(fail);
   return box;
 }
+const giftImageSourcesByName = (it) => [it?.name, it?.slug]
+  .map((value) => String(value || '').trim())
+  .filter(Boolean)
+  .map((value) => 'https://api.changes.tg/original/' + encodeURIComponent(value) + '.png?size=256')
+  .filter((value, index, all) => all.indexOf(value) === index);
 const giftImg = (it, lazy, play) => {                // оригинальный подарок: без фона, не улучшенный
   if (isCash(it)) return cashAnim(play);                                                                              // денежный дроп → money.tgs
   const img = document.createElement('img');
   img.alt = ''; img.loading = lazy ? 'lazy' : 'eager'; img.decoding = 'async';
   img.style.opacity = '0'; img.style.transition = 'opacity .3s ease';
   img.addEventListener('load', () => { img.style.opacity = '1'; });
-  img.addEventListener('error', () => { const f = document.createElement('span'); f.className = 'wxs-gift-fallback'; f.textContent = '🎁'; img.replaceWith(f); }, { once: true });
-  img.src = 'https://api.changes.tg/original/' + encodeURIComponent(it.slug || '') + '.png?size=256';
+  const sources = giftImageSourcesByName(it);
+  let sourceIndex = 0;
+  img.addEventListener('error', () => {
+    sourceIndex += 1;
+    if (sources[sourceIndex]) { img.src = sources[sourceIndex]; return; }
+    const f = document.createElement('span'); f.className = 'wxs-gift-fallback'; f.textContent = '🎁'; img.replaceWith(f);
+  });
+  img.src = sources[0] || '';
   return img;
 };
 
@@ -2367,13 +2392,14 @@ function openPayLink(url) {
 (function topupSheet() {
   const sheet = $('#tpSheet'), panel = $('#tpPanel'), input = $('#tpInput'), payBtn = $('#tpPay');
   const FALLBACK = (bg, t) => 'data:image/svg+xml,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><rect width="48" height="48" rx="12" fill="${bg}"/><text x="24" y="30" text-anchor="middle" font-size="13" font-weight="800" fill="#fff" font-family="Arial">${t}</text></svg>`);
-  const IMG = (f, bg, t) => `<img src="${f}" alt="" draggable="false" onerror="this.onerror=null;this.src='${FALLBACK(bg, t)}'">`;
+  const IMG = (f, bg, t) => `<img src="${f}?v=2" alt="" draggable="false" onerror="this.onerror=null;this.src='${FALLBACK(bg, t)}'">`;
   const GRAM = IMG('gram.png', '#3b82f6', 'TON');
   const USD = '<b class="tp-usd">$</b>';
+  const AMOUNTS = [0.5, 1, 2, 5, 10, 25];
   const METHODS = [
-    { id: 'ton', name: 'TON', ico: IMG('gram.png', '#3b82f6', 'TON'), amts: [1.51, 3.01, 7.51, 15.01, 30.02, 75.05], cur: GRAM, rate: 0 },   // rate — живой курс с сервера
-    { id: 'xrocket', name: 'xRocket', ico: IMG('xrocket.png', '#7c5cff', 'xR'), amts: [1, 5, 10, 25, 50, 100], cur: USD, rate: 1 },
-    { id: 'cryptobot', name: 'CryptoBot', ico: IMG('cryptobot.png', '#2fa5e8', 'CB'), amts: [1, 5, 10, 25, 50, 100], cur: USD, rate: 1 },
+    { id: 'ton', name: 'TON', ico: IMG('gram.png', '#3b82f6', 'TON'), amts: AMOUNTS, cur: GRAM, rate: 0 },   // rate — живой курс с сервера
+    { id: 'xrocket', name: 'xRocket', ico: IMG('xrocket.png', '#7c5cff', 'xR'), amts: AMOUNTS, cur: USD, rate: 1 },
+    { id: 'cryptobot', name: 'CryptoBot', ico: IMG('cryptobot.png', '#2fa5e8', 'CB'), amts: AMOUNTS, cur: USD, rate: 1 },
   ];
   const CHK = '<span class="tp-chk"><svg viewBox="0 0 12 12"><path d="M2 6.5l3 3 5-6"/></svg></span>';
   let m = METHODS[0], amount = m.amts[1], timer = 0, payBusy = false;
