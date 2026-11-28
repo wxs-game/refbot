@@ -1774,9 +1774,9 @@ function upgSyncBetInput() {
         for (let n = 0; n < need; n++) { const dot = document.createElement('i'); if (n < q) dot.className = 'done'; dots.append(dot); }
         progress.append(label, dots);
         const rules = document.createElement('ol'); rules.className = 'wxs-withdraw-rules';
-        ['Приглашённый должен перейти по вашей ссылке и написать боту /start.', 'Реферал засчитывается после подтверждения Telegram Premium. Проверка NFT-подарков Telegram требует отдельной проверки.', 'После 4 подтверждённых рефералов отправьте заявку. Подарок исчезнет из ставок и продажи, а статус станет «Ожидание».'].forEach((text) => { const li = document.createElement('li'); li.textContent = text; rules.append(li); });
+        ['Ваш друг должен открыть кейс по Вашей реферальной ссылке.', 'Реферал засчитывается если у него есть Telegram Premium или NFT-подарок в профиле.', 'После 4 валидных рефералов вывод подарка станет доступным. Открывать кейс "Реферальный" можно 1 раз в 7 дней.'].forEach((text) => { const li = document.createElement('li'); li.textContent = text; rules.append(li); });
         const invite = document.createElement('button'); invite.type = 'button'; invite.className = 'wxs-invite'; invite.textContent = 'Пригласить друзей'; invite.onclick = shareReferral;
-        const submit = document.createElement('button'); submit.type = 'button'; submit.className = 'wxs-item-btn is-gold wxs-withdraw-submit'; submit.textContent = q >= need ? 'Отправить заявку на вывод' : 'Нужно ещё ' + (need - q) + ' реферал(а)'; submit.disabled = q < need;
+        const submit = document.createElement('button'); submit.type = 'button'; submit.className = 'wxs-item-btn is-gold wxs-withdraw-submit'; submit.textContent = q >= need ? 'Вывести' : 'Нужно ещё ' + (need - q) + ' реферал(а)'; submit.disabled = q < need;
         submit.onclick = async () => { if (busy || submit.disabled) return; busy = true; submit.disabled = true; try { const r = await rpc('gift_withdraw_request', { p_request: item.id }); if (!r.ok) return showMessage(r.error || 'Вывод пока недоступен'); await refreshLive(); view = 'inventory'; renderDialog(); } catch (_) { showMessage('Не удалось создать заявку на вывод. Попробуйте позже.'); } finally { busy = false; } };
         itemBox.replaceChildren(img, title, gift, progress, rules, invite, submit);
     }
